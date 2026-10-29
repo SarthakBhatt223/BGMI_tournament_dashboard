@@ -2,22 +2,26 @@
 // Restore REPLACES all tournament data. The backup is fully validated first; the replacement
 // then runs in one transaction, so a failure leaves the existing data untouched.
 import { runInTransaction } from '../db/database.js';
+import { BACKFILL_TEAM_FINISHES_SQL } from '../db/migrate.js';
 import { unprocessable } from '../errors.js';
 import { recordAudit } from './auditService.js';
 import { validateTournamentConfig } from './eventService.js';
 
 export const BACKUP_FORMAT = 'bgmi-tournament-backup';
-export const BACKUP_VERSION = 1;
+// Version 2 stores team finish totals in team_match_results. Version 1 backups (team totals
+// were derived from finish_events) are still accepted and converted while restoring.
+export const BACKUP_VERSION = 2;
+const READABLE_VERSIONS = [1, 2];
 
-// Column types: int, text, intOrNull, textOrNull. Tables are listed in insert order
-// (parents before children); deletion runs in the reverse order.
+// Column types: int, text, intOrNull, textOrNull, intDefault0 (missing in older backups).
+// Tables are listed in insert order (parents before children); deletion runs in reverse.
 const BACKUP_TABLES = [
   { name: 'events', columns: { id: 'int', name: 'text', club_name: 'text', status: 'text', created_at: 'text', updated_at: 'text' } },
   { name: 'event_config', columns: { event_id: 'int', config_json: 'text', updated_at: 'text' } },
   { name: 'teams', columns: { id: 'int', event_id: 'int', name: 'text', short_name: 'textOrNull', logo_path: 'textOrNull', active: 'int', created_at: 'text' } },
   { name: 'players', columns: { id: 'int', team_id: 'int', name: 'text', in_game_name: 'textOrNull', active: 'int', created_at: 'text' } },
   { name: 'matches', columns: { id: 'int', event_id: 'int', match_number: 'int', label: 'textOrNull', status: 'text', created_at: 'text', finalized_at: 'textOrNull' } },
-  { name: 'team_match_results', columns: { id: 'int', match_id: 'int', team_id: 'int', placement: 'intOrNull', placement_points: 'int', is_wwcd: 'int', finish_points_snapshot: 'intOrNull' } },
+  { name: 'team_match_results', columns: { id: 'int', match_id: 'int', team_id: 'int', placement: 'intOrNull', placement_points: 'int', is_wwcd: 'int', finish_points_snapshot: 'intOrNull', finish_count: 'intDefault0', finish_entered: 'intDefault0' } },
   { name: 'finish_events', columns: { id: 'int', event_id: 'int', match_id: 'int', team_id: 'int', player_id: 'intOrNull', action_type: 'text', idempotency_key: 'textOrNull', created_at: 'text', reversed_at: 'textOrNull' } },
   { name: 'broadcast_state', columns: { id: 'int', event_id: 'int', mode: 'text', leaderboard_layout: 'text', current_match_id: 'intOrNull', scroll_interval_seconds: 'int', mvp_player_id: 'intOrNull', headline_text: 'textOrNull', subtitle_text: 'textOrNull', updated_at: 'text' } },
   { name: 'audit_log', columns: { id: 'int', event_id: 'intOrNull', action: 'text', entity_type: 'text', entity_id: 'intOrNull', details_json: 'text', created_at: 'text' } },
@@ -32,6 +36,7 @@ const ALLOWED_VALUES = {
   'teams.active': [0, 1],
   'players.active': [0, 1],
   'team_match_results.is_wwcd': [0, 1],
+  'team_match_results.finish_entered': [0, 1],
 };
 
 const MAX_REPORTED_PROBLEMS = 25;
@@ -50,6 +55,11 @@ function firstColumn(table) {
   return Object.keys(table.columns)[0];
 }
 
+function defaultFor(type) {
+  if (type.endsWith('OrNull')) return null;
+  return type === 'intDefault0' ? 0 : undefined;
+}
+
 function isValidValue(value, type) {
   if (type.endsWith('OrNull') && value === null) return true;
   return type.startsWith('int') ? Number.isInteger(value) : typeof value === 'string';
@@ -65,8 +75,8 @@ export function validateBackup(backup) {
   if (backup === null || typeof backup !== 'object' || backup.format !== BACKUP_FORMAT) {
     return [`Not a tournament backup file (expected format "${BACKUP_FORMAT}").`];
   }
-  if (backup.version !== BACKUP_VERSION) {
-    return [`Unsupported backup version ${backup.version}; this server reads version ${BACKUP_VERSION}.`];
+  if (!READABLE_VERSIONS.includes(backup.version)) {
+    return [`Unsupported backup version ${backup.version}; this server reads versions ${READABLE_VERSIONS.join(' and ')}.`];
   }
   if (backup.tables === null || typeof backup.tables !== 'object') {
     return ['The backup has no "tables" section.'];
@@ -84,8 +94,9 @@ export function validateBackup(backup) {
       const label = `${table.name}[${index}]`;
       if (row === null || typeof row !== 'object') return report(`${label} is not an object.`);
       for (const [column, type] of Object.entries(table.columns)) {
-        const value = row[column] === undefined && type.endsWith('OrNull') ? null : row[column];
+        const value = row[column] === undefined ? defaultFor(type) : row[column];
         if (!isValidValue(value, type)) report(`${label}.${column} has an invalid value.`);
+        if (column === 'finish_count' && value < 0) report(`${label}.${column} must not be negative.`);
         const allowed = ALLOWED_VALUES[`${table.name}.${column}`];
         if (allowed && !allowed.includes(value)) report(`${label}.${column} must be one of: ${allowed.join(', ')}.`);
       }
@@ -163,15 +174,17 @@ export function restoreBackup(db, backup) {
     for (const table of [...BACKUP_TABLES].reverse()) {
       db.exec(`DELETE FROM ${table.name}`);
     }
+    db.exec('DELETE FROM score_requests'); // request ids belong to the replaced data
     for (const table of BACKUP_TABLES) {
       const columnNames = Object.keys(table.columns);
       const insert = db.prepare(
         `INSERT INTO ${table.name} (${columnNames.join(', ')}) VALUES (${columnNames.map(() => '?').join(', ')})`,
       );
       for (const row of backup.tables[table.name]) {
-        insert.run(...columnNames.map((column) => row[column] ?? null));
+        insert.run(...columnNames.map((column) => row[column] ?? defaultFor(table.columns[column]) ?? null));
       }
     }
+    if (backup.version === 1) db.exec(BACKFILL_TEAM_FINISHES_SQL);
     const eventId = backup.tables.events[0].id;
     recordAudit(db, eventId, 'backup.restore', 'backup', null, {
       exportedAt: backup.exportedAt ?? null,

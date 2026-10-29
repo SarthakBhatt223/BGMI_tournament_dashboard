@@ -5,11 +5,13 @@ import BackupPanel from '../components/BackupPanel.jsx';
 import BroadcastControls from '../components/BroadcastControls.jsx';
 import ErrorBanner from '../components/ErrorBanner.jsx';
 import MatchControls from '../components/MatchControls.jsx';
+import PlayerFinishAudit from '../components/PlayerFinishAudit.jsx';
 import PlayerList from '../components/PlayerList.jsx';
 import RosterManager from '../components/RosterManager.jsx';
 import SettingsPanel from '../components/SettingsPanel.jsx';
 import TeamTable from '../components/TeamTable.jsx';
 import { useActionRunner } from '../hooks/useActionRunner.js';
+import { useKeyedActions } from '../hooks/useKeyedActions.js';
 import { useTournamentState } from '../hooks/useTournamentState.js';
 import { api, getAdminSecret, setAdminSecret } from '../services/api.js';
 import { BROADCAST_MODE_LABELS, describeMatch } from '../utils/formatters.js';
@@ -17,6 +19,7 @@ import { BROADCAST_MODE_LABELS, describeMatch } from '../utils/formatters.js';
 const TABS = [
   ['dashboard', 'Dashboard'],
   ['scoring', 'Scoring'],
+  ['audit', 'Player Finish Audit'],
   ['roster', 'Roster'],
   ['players', 'Player stats'],
   ['broadcast', 'Broadcast'],
@@ -42,6 +45,7 @@ function Dashboard({ state, connection, onOpenTab }) {
         </dl>
         <div className="button-group">
           <button type="button" onClick={() => onOpenTab('scoring')}>Go to scoring</button>
+          <button type="button" className="button-secondary" onClick={() => onOpenTab('audit')}>Player finish audit</button>
           <button type="button" className="button-secondary" onClick={() => onOpenTab('roster')}>Manage roster</button>
           <button type="button" className="button-secondary" onClick={() => onOpenTab('broadcast')}>Broadcast controls</button>
         </div>
@@ -71,10 +75,12 @@ function AdminWorkspace({ onSignOut }) {
     if (connection !== 'connected') await refresh();
   }, [connection, refresh]);
   const { run, busy, error, clearError } = useActionRunner({ onSuccess: refreshWhenDisconnected });
+  // Row-level actions (team and player +/-) run without locking the page, so quick repeated clicks all count.
+  const keyed = useKeyedActions({ onSuccess: refreshWhenDisconnected });
 
   useEffect(() => {
-    if (error?.status === 401) onSignOut();
-  }, [error, onSignOut]);
+    if (error?.status === 401 || keyed.lastError?.status === 401) onSignOut();
+  }, [error, keyed.lastError, onSignOut]);
 
   if (!state) {
     return (
@@ -100,8 +106,14 @@ function AdminWorkspace({ onSignOut }) {
       </nav>
       <main className="admin-main">
         <ErrorBanner error={error} onDismiss={clearError} />
+        <ErrorBanner error={keyed.lastError} onDismiss={keyed.clearError} />
         <div hidden={activeTab !== 'dashboard'}><Dashboard state={state} connection={connection} onOpenTab={setActiveTab} /></div>
-        <div hidden={activeTab !== 'scoring'}><MatchControls state={state} run={run} busy={busy} /></div>
+        <div hidden={activeTab !== 'scoring'}>
+          <MatchControls state={state} run={run} busy={busy} runFor={keyed.runFor} statuses={keyed.statuses} />
+        </div>
+        <div hidden={activeTab !== 'audit'}>
+          <PlayerFinishAudit state={state} run={run} busy={busy} runFor={keyed.runFor} statuses={keyed.statuses} />
+        </div>
         <div hidden={activeTab !== 'roster'}><RosterManager state={state} run={run} busy={busy} /></div>
         <div hidden={activeTab !== 'players'}><PlayerList playerStats={state.playerStats} /></div>
         <div hidden={activeTab !== 'broadcast'}><BroadcastControls state={state} run={run} busy={busy} /></div>

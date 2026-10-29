@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { api } from '../services/api.js';
-import { describeMatch, formatClockTime, makeRequestId, MATCH_STATUS_LABELS } from '../utils/formatters.js';
-import EmptyState from './EmptyState.jsx';
+import { statusText } from '../hooks/useKeyedActions.js';
+import { describeMatch, makeRequestId, MATCH_STATUS_LABELS } from '../utils/formatters.js';
 
 function MatchPicker({ state, run, busy }) {
   const currentMatch = state.currentMatch?.match ?? null;
@@ -80,200 +80,180 @@ function MatchPicker({ state, run, busy }) {
   );
 }
 
-function FinishEntry({ state, run, busy }) {
+// Per-row feedback. "Saved" appears only after the server confirmed the change.
+function RowStatus({ status }) {
+  const text = statusText(status);
+  return (
+    <span className={`row-status row-status-${status?.state ?? 'idle'}`} role="status" aria-live="polite">
+      {text}
+    </span>
+  );
+}
+
+function FinishStepper({ team, canScore, runFor, matchId, status }) {
+  const label = team.name;
+  // Each click gets its own request id: the server ignores a repeat of the same id (a retried
+  // request) but counts every deliberate click.
+  const step = (delta) => runFor(`team:${team.teamId}`, () => api.adjustTeamFinish(matchId, team.teamId, delta, makeRequestId()));
+  return (
+    <div className="stepper">
+      <button type="button" className="stepper-button" aria-label={`Remove one finish from ${label}`} disabled={!canScore || team.finishCount <= 0} onClick={() => step(-1)}>
+        &minus;
+      </button>
+      <output className="stepper-value" aria-label={`Finishes for ${label}`}>{team.finishCount}</output>
+      <button type="button" className="stepper-button" aria-label={`Add one finish to ${label}`} disabled={!canScore} onClick={() => step(1)}>
+        +
+      </button>
+      <RowStatus status={status} />
+    </div>
+  );
+}
+
+function ScoringHeader({ detail, state }) {
+  const { match, summary } = detail;
+  const finalized = match.status === 'finalized';
+  const teamsWithTotals = detail.teams.filter((team) => team.finishEntered).length;
+  const warnings = [];
+  if (summary.duplicatePlacements.length > 0) {
+    warnings.push(...summary.duplicatePlacements.map((entry) => `Placement ${entry.placement} is assigned to more than one team: ${entry.teams.join(', ')}.`));
+  }
+  const missing = summary.teamCount - summary.placementsEntered;
+  if (missing > 0 && match.status !== 'planned') warnings.push(`${missing} team(s) have no placement yet.`);
+
+  return (
+    <>
+      <div className="scoring-header">
+        <div>
+          <h2>{describeMatch(match)}</h2>
+          <p className="muted">
+            Status: {MATCH_STATUS_LABELS[match.status]}
+            {state.config.scoring.requirePlayerReconciliationToFinalize && ' - finalizing requires matching player finishes (Player Finish Audit tab)'}
+          </p>
+        </div>
+        <dl className="scoring-facts">
+          <div><dt>Placements entered</dt><dd>{summary.placementsEntered}/{summary.teamCount}</dd></div>
+          <div><dt>Finish totals entered</dt><dd>{teamsWithTotals}/{summary.teamCount}</dd></div>
+          <div>
+            <dt>Results</dt>
+            <dd><span className={finalized ? 'badge badge-final' : 'badge badge-provisional'}>{finalized ? 'Finalized' : 'Provisional'}</span></dd>
+          </div>
+        </dl>
+      </div>
+      {warnings.length > 0 && (
+        <ul className="form-message-warning scoring-warnings" aria-label="Placement warnings">
+          {warnings.map((warning) => <li key={warning}>{warning}</li>)}
+        </ul>
+      )}
+    </>
+  );
+}
+
+function TeamScoring({ state, run, busy, runFor, statuses }) {
   const detail = state.currentMatch;
-  const [selectedTeamId, setSelectedTeamId] = useState('');
-  const [selectedPlayerId, setSelectedPlayerId] = useState('');
-
-  const allowUnattributed = state.config.scoring.allowUnattributedFinishes;
-  const activeTeams = state.teams.filter((team) => team.active);
-  const teamPlayers = state.players.filter((player) => player.active && String(player.teamId) === selectedTeamId);
-  const canScore = detail?.match.status === 'in_progress';
-  const canAdd = canScore && selectedTeamId !== '' && (selectedPlayerId !== '' || allowUnattributed);
-
-  function addFinish() {
-    run(() =>
-      api.addFinish(detail.match.id, {
-        teamId: Number(selectedTeamId),
-        playerId: selectedPlayerId === '' ? null : Number(selectedPlayerId),
-        requestId: makeRequestId(),
-      }),
+  if (!detail) {
+    return (
+      <section className="panel">
+        <h2>Match scoring</h2>
+        <p className="muted">Select or create a match above.</p>
+      </section>
     );
   }
+  const matchId = detail.match.id;
+  const canScore = detail.match.status === 'in_progress';
+  const allowDuplicates = state.config.scoring.allowDuplicatePlacements;
+  const placementOptions = Array.from({ length: detail.teams.filter((team) => team.active).length }, (_, index) => index + 1);
+  const holderByPlacement = new Map(detail.teams.filter((team) => team.placement !== null).map((team) => [team.placement, team]));
 
-  const recentFinishes = detail?.finishEvents.slice(0, 12) ?? [];
+  function changePlacement(team, value) {
+    if (value === '') run(() => api.clearPlacement(matchId, team.teamId));
+    else run(() => api.setPlacement(matchId, team.teamId, Number(value)));
+  }
+
+  const finishTotal = detail.teams.reduce((sum, team) => sum + team.finishCount, 0);
+
   return (
     <section className="panel">
-      <h2>Finish entry</h2>
-      {!canScore && <p className="muted">Start the current match to record finishes.</p>}
-      <div className="form-row">
-        <label>
-          Team
-          <select
-            value={selectedTeamId}
-            onChange={(event) => {
-              setSelectedTeamId(event.target.value);
-              setSelectedPlayerId('');
-            }}
-          >
-            <option value="">Select team</option>
-            {activeTeams.map((team) => (
-              <option key={team.id} value={team.id}>
-                {team.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Player
-          <select value={selectedPlayerId} onChange={(event) => setSelectedPlayerId(event.target.value)} disabled={selectedTeamId === ''}>
-            <option value="">{allowUnattributed ? 'Unattributed' : 'Select player'}</option>
-            {teamPlayers.map((player) => (
-              <option key={player.id} value={player.id}>
-                {player.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button type="button" className="button-large" disabled={busy || !canAdd} onClick={addFinish}>
-          +1 Finish
-        </button>
-        <button
-          type="button"
-          className="button-secondary"
-          disabled={busy || detail?.lastUndoableFinishEventId == null}
-          onClick={() => run(() => api.undoFinish(detail.lastUndoableFinishEventId))}
-        >
-          Undo last finish
-        </button>
-      </div>
-      {selectedTeamId !== '' && teamPlayers.length === 0 && (
-        <p className="form-message-warning">This team has no active players. Add players in the Roster tab.</p>
+      <ScoringHeader detail={detail} state={state} />
+      {!canScore && (
+        <p className="form-message-info">
+          {detail.match.status === 'planned' ? 'Start the match to enter finishes and placements.' : 'This match is finalized. Reopen it with a reason to correct scores.'}
+        </p>
       )}
-
-      <h3>Recent finishes</h3>
-      {recentFinishes.length === 0 ? (
-        <EmptyState title="No finishes recorded yet" />
-      ) : (
-        <table className="data-table">
+      <div className="table-scroll">
+        <table className="data-table scoring-table">
           <thead>
             <tr>
-              <th>Time</th>
+              <th>Rank</th>
               <th>Team</th>
-              <th>Player</th>
-              <th>Actions</th>
+              <th>Finishes</th>
+              <th>Finish points</th>
+              <th>Placement</th>
+              <th>Placement points</th>
+              <th>Total points</th>
             </tr>
           </thead>
           <tbody>
-            {recentFinishes.map((finish) => {
-              const team = state.teams.find((candidate) => candidate.id === finish.teamId);
-              const sameTeamPlayers = state.players.filter((player) => player.active && player.teamId === finish.teamId && player.id !== finish.playerId);
-              const isReversed = finish.reversedAt !== null;
+            {detail.teams.map((team) => {
+              const problem = team.placementDuplicate ? 'duplicate' : team.placement === null && detail.match.status !== 'planned' ? 'missing' : '';
               return (
-                <tr key={finish.id} className={isReversed ? 'row-reversed' : ''}>
-                  <td>{formatClockTime(finish.createdAt)}</td>
-                  <td>{team?.name ?? finish.teamId}</td>
-                  <td>{finish.playerName ?? 'Unattributed'}</td>
+                <tr key={team.teamId} className={problem ? `row-${problem}` : ''}>
+                  <td>{team.matchRank}</td>
                   <td>
-                    {isReversed ? (
-                      <span className="muted">undone</span>
-                    ) : (
-                      <>
-                        <button type="button" className="button-secondary" disabled={busy || !canScore} onClick={() => run(() => api.undoFinish(finish.id))}>
-                          Undo
-                        </button>{' '}
-                        <select
-                          aria-label="Correct player"
-                          value=""
-                          disabled={busy || !canScore || sameTeamPlayers.length === 0}
-                          onChange={(event) => run(() => api.correctFinish(finish.id, Number(event.target.value)))}
-                        >
-                          <option value="">Change player...</option>
-                          {sameTeamPlayers.map((player) => (
-                            <option key={player.id} value={player.id}>
-                              {player.name}
-                            </option>
-                          ))}
-                        </select>
-                      </>
-                    )}
+                    {team.name}
+                    {team.isWwcd && <span className="badge badge-final wwcd-badge">WWCD</span>}
                   </td>
+                  <td>
+                    <FinishStepper team={team} canScore={canScore} runFor={runFor} matchId={matchId} status={statuses[`team:${team.teamId}`]} />
+                  </td>
+                  <td>{team.finishPoints}</td>
+                  <td>
+                    <select
+                      aria-label={`Placement for ${team.name}`}
+                      value={team.placement ?? ''}
+                      disabled={busy || !canScore}
+                      onChange={(event) => changePlacement(team, event.target.value)}
+                    >
+                      <option value="">Not set</option>
+                      {placementOptions.map((placement) => {
+                        const holder = holderByPlacement.get(placement);
+                        const takenByOther = holder && holder.teamId !== team.teamId;
+                        return (
+                          <option key={placement} value={placement} disabled={takenByOther && !allowDuplicates}>
+                            {placement}{takenByOther ? ` (${holder.name})` : ''}
+                          </option>
+                        );
+                      })}
+                    </select>
+                    {problem === 'duplicate' && <span className="flag flag-error">Duplicate</span>}
+                    {problem === 'missing' && <span className="flag flag-warning">Missing</span>}
+                  </td>
+                  <td>{team.placementPoints}</td>
+                  <td><strong>{team.totalPoints}</strong></td>
                 </tr>
               );
             })}
           </tbody>
-        </table>
-      )}
-    </section>
-  );
-}
-
-function ScoreSummary({ state, run, busy }) {
-  const detail = state.currentMatch;
-  if (!detail) return null;
-  const canScore = detail.match.status === 'in_progress';
-  const placementOptions = Array.from({ length: detail.teams.filter((team) => team.active).length }, (_, index) => index + 1);
-
-  function changePlacement(team, value) {
-    if (value === '') run(() => api.clearPlacement(detail.match.id, team.teamId));
-    else run(() => api.setPlacement(detail.match.id, team.teamId, Number(value)));
-  }
-
-  return (
-    <section className="panel">
-      <h2>Team scores - {describeMatch(detail.match)}</h2>
-      <table className="data-table">
-        <thead>
-          <tr>
-            <th>Team</th>
-            <th>Finishes</th>
-            <th>Placement</th>
-            <th>WWCD</th>
-            <th>Placement pts</th>
-            <th>Finish pts</th>
-            <th>Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          {detail.teams.map((team) => (
-            <tr key={team.teamId}>
-              <td>{team.name}</td>
-              <td>{team.finishCount}</td>
-              <td>
-                <select
-                  aria-label={`Placement for ${team.name}`}
-                  value={team.placement ?? ''}
-                  disabled={busy || !canScore}
-                  onChange={(event) => changePlacement(team, event.target.value)}
-                >
-                  <option value="">-</option>
-                  {placementOptions.map((placement) => (
-                    <option key={placement} value={placement}>
-                      {placement}
-                    </option>
-                  ))}
-                </select>
-              </td>
-              <td>{team.isWwcd ? 'Yes' : ''}</td>
-              <td>{team.placementPoints}</td>
-              <td>{team.finishPoints}</td>
-              <td>
-                <strong>{team.totalPoints}</strong>
-              </td>
+          <tfoot>
+            <tr>
+              <td colSpan={2}>All teams</td>
+              <td>{finishTotal}</td>
+              <td>{detail.teams.reduce((sum, team) => sum + team.finishPoints, 0)}</td>
+              <td />
+              <td>{detail.teams.reduce((sum, team) => sum + team.placementPoints, 0)}</td>
+              <td>{detail.teams.reduce((sum, team) => sum + team.totalPoints, 0)}</td>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </tfoot>
+        </table>
+      </div>
     </section>
   );
 }
 
-export default function MatchControls({ state, run, busy }) {
+export default function MatchControls({ state, run, busy, runFor, statuses }) {
   return (
     <div className="panel-stack">
       <MatchPicker state={state} run={run} busy={busy} />
-      <FinishEntry state={state} run={run} busy={busy} />
-      <ScoreSummary state={state} run={run} busy={busy} />
+      <TeamScoring state={state} run={run} busy={busy} runFor={runFor} statuses={statuses} />
     </div>
   );
 }

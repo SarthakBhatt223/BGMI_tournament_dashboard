@@ -84,9 +84,13 @@ export const api = {
   setPlacement: (matchId, teamId, placement) =>
     request('PUT', `/matches/${matchId}/results/${teamId}`, { body: { placement } }),
   clearPlacement: (matchId, teamId) => request('DELETE', `/matches/${matchId}/results/${teamId}`),
-  addFinish: (matchId, finish) => request('POST', `/matches/${matchId}/finish-events`, { body: finish }),
-  undoFinish: (finishEventId) => request('POST', `/finish-events/${finishEventId}/undo`, { body: {} }),
-  correctFinish: (finishEventId, playerId) => request('PATCH', `/finish-events/${finishEventId}`, { body: { playerId } }),
+  // Team finish total (Match Scoring). delta is +1 or -1; requestId must be new for every click.
+  adjustTeamFinish: (matchId, teamId, delta, requestId) =>
+    request('POST', `/matches/${matchId}/teams/${teamId}/finishes`, { body: { delta, requestId } }),
+  // Player Finish Audit. The server never changes the team total because of these.
+  getPlayerAudit: (matchId) => request('GET', `/matches/${matchId}/player-audit`),
+  adjustPlayerFinish: (matchId, playerId, teamId, delta, requestId) =>
+    request('POST', `/matches/${matchId}/players/${playerId}/finishes`, { body: { delta, requestId, teamId } }),
 
   updateBroadcast: (changes) => request('PUT', '/broadcast', { body: changes }),
   selectMvp: (playerId) => request('PUT', '/mvp', { body: { playerId } }),

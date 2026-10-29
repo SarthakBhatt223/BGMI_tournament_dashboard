@@ -13,7 +13,7 @@ const TIE_BREAKER_DIRECTION = {
 // Compares two standing rows. Order: total points, then the configured tie-breakers in order,
 // then team id. The team-id fallback is only a technical rule that keeps the order stable
 // and repeatable; it is NOT an official competitive tie-breaker.
-function compareStandingRows(rowA, rowB, tieBreakers) {
+export function compareStandingRows(rowA, rowB, tieBreakers) {
   if (rowA.totalPoints !== rowB.totalPoints) return rowB.totalPoints - rowA.totalPoints;
   for (const key of tieBreakers) {
     const valueA = rowA[key];
@@ -29,11 +29,11 @@ function compareStandingRows(rowA, rowB, tieBreakers) {
 // Pure calculation, separated from the database so it can be tested directly.
 //   teams:        active teams to rank (every one appears in the output)
 //   matches:      matches that count: [{ id, status }]
-//   results:      team_match_results rows for those matches
-//   finishCounts: [{ matchId, teamId, finishCount }] from the finish ledger
-export function buildStandings({ teams, matches, results, finishCounts, scoring }) {
+//   results:      team_match_results rows for those matches (they hold the team finish totals)
+// Player finishes (Player Finish Audit) are deliberately NOT used here, so they can never
+// add team points a second time.
+export function buildStandings({ teams, matches, results, scoring }) {
   const resultByKey = new Map(results.map((row) => [`${row.match_id}:${row.team_id}`, row]));
-  const finishCountByKey = new Map(finishCounts.map((row) => [`${row.matchId}:${row.teamId}`, row.finishCount]));
 
   const rows = teams.map((team) => {
     const row = {
@@ -60,7 +60,7 @@ export function buildStandings({ teams, matches, results, finishCounts, scoring 
         row.finishPoints += result.finish_points_snapshot ?? 0;
         row.wwcd += result.is_wwcd;
       } else {
-        const score = scoreTeamMatch(scoring, { placement, finishCount: finishCountByKey.get(key) ?? 0 });
+        const score = scoreTeamMatch(scoring, { placement, finishCount: result?.finish_count ?? 0 });
         row.placementPoints += score.placementPoints;
         row.finishPoints += score.finishPoints;
         row.wwcd += score.isWwcd ? 1 : 0;
@@ -91,20 +91,12 @@ export function computeStandings(db, eventId) {
     .all(eventId, ...statuses);
   const matchIds = matches.map((match) => match.id);
   if (matchIds.length === 0) {
-    return buildStandings({ teams, matches, results: [], finishCounts: [], scoring });
+    return buildStandings({ teams, matches, results: [], scoring });
   }
 
   const placeholders = matchIds.map(() => '?').join(', ');
   const results = db.prepare(`SELECT * FROM team_match_results WHERE match_id IN (${placeholders})`).all(...matchIds);
-  const finishCounts = db
-    .prepare(
-      `SELECT match_id, team_id, COUNT(*) AS finish_count FROM finish_events
-       WHERE reversed_at IS NULL AND match_id IN (${placeholders}) GROUP BY match_id, team_id`,
-    )
-    .all(...matchIds)
-    .map((row) => ({ matchId: row.match_id, teamId: row.team_id, finishCount: row.finish_count }));
-
-  return buildStandings({ teams, matches, results, finishCounts, scoring });
+  return buildStandings({ teams, matches, results, scoring });
 }
 
 // Splits standings into pages for the scrolling leaderboard. Every page is full: when the

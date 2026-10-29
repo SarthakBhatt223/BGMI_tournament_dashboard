@@ -25,11 +25,12 @@ export const defaultTournamentConfig = {
     // Two teams may not share a placement unless the organizer explicitly allows it.
     allowDuplicatePlacements: false,
 
-    // When true, finishes can be recorded for a team without naming a player.
-    allowUnattributedFinishes: false,
-
-    // Sanity limit used when finalizing: total finishes in one match.
+    // Sanity limit for the finishes of one match (team totals and player totals).
     maxFinishesPerMatch: 99,
+
+    // When true, a match cannot be finalized until every team's recorded finish total equals
+    // the sum of its players' finishes (Player Finish Audit tab).
+    requirePlayerReconciliationToFinalize: true,
 
     // When true, every active team needs a placement before a match can be finalized.
     requireAllTeamsPlaced: true,

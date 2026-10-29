@@ -69,6 +69,11 @@ function TeamRow({ team, allTeams, players, run, busy, playersPerTeam }) {
           Delete
         </button>
       </div>
+      {team.hasHistory && (
+        <p className="muted">
+          Delete is unavailable: this team has recorded match results or finishes, which are kept as history. Use Deactivate to remove it from standings and new matches.
+        </p>
+      )}
       <div className="team-card-logo">
         <label>
           Logo (PNG, JPEG or WebP, max 2 MB)

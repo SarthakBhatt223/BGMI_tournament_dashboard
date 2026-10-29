@@ -1,7 +1,7 @@
 import { badRequest, notFound } from '../errors.js';
 import { runInTransaction } from '../db/database.js';
 import { recordAudit } from './auditService.js';
-import { TIE_BREAKER_KEYS } from './defaultTournamentConfig.js';
+import { defaultTournamentConfig, TIE_BREAKER_KEYS } from './defaultTournamentConfig.js';
 import { optionalText, requireBoolean, requireInteger, requireObject, requireText } from '../validation.js';
 
 // The application supports a single active event: the first one in the table.
@@ -31,7 +31,9 @@ export function updateEvent(db, input) {
 export function getTournamentConfig(db, eventId) {
   const row = db.prepare('SELECT config_json FROM event_config WHERE event_id = ?').get(eventId);
   if (!row) throw notFound('Event configuration is missing');
-  return JSON.parse(row.config_json);
+  // Saved configurations from older versions may lack newer keys; fill those from the defaults.
+  const saved = JSON.parse(row.config_json);
+  return { ...saved, scoring: { ...defaultTournamentConfig.scoring, ...saved.scoring } };
 }
 
 export function updateTournamentConfig(db, eventId, input) {
@@ -60,8 +62,12 @@ export function validateTournamentConfig(input) {
       winnerPlacement: requireInteger(scoring.winnerPlacement, 'winnerPlacement', { min: 1, max: 100 }),
       tieBreakers: validateTieBreakers(scoring.tieBreakers),
       allowDuplicatePlacements: requireBoolean(scoring.allowDuplicatePlacements, 'allowDuplicatePlacements'),
-      allowUnattributedFinishes: requireBoolean(scoring.allowUnattributedFinishes, 'allowUnattributedFinishes'),
       maxFinishesPerMatch: requireInteger(scoring.maxFinishesPerMatch, 'maxFinishesPerMatch', { min: 1, max: 1000 }),
+      // Added later: older saved configurations and backups do not have it yet.
+      requirePlayerReconciliationToFinalize: requireBoolean(
+        scoring.requirePlayerReconciliationToFinalize ?? defaultTournamentConfig.scoring.requirePlayerReconciliationToFinalize,
+        'requirePlayerReconciliationToFinalize',
+      ),
       requireAllTeamsPlaced: requireBoolean(scoring.requireAllTeamsPlaced, 'requireAllTeamsPlaced'),
       countInProgressMatchInStandings: requireBoolean(scoring.countInProgressMatchInStandings, 'countInProgressMatchInStandings'),
     },

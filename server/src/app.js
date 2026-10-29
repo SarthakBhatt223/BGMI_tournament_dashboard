@@ -11,7 +11,6 @@ import { buildState } from './services/stateService.js';
 import { createBackupsRouter } from './routes/backups.js';
 import { createBroadcastRouter } from './routes/broadcast.js';
 import { createEventRouter } from './routes/event.js';
-import { createFinishEventsRouter } from './routes/finishEvents.js';
 import { createMatchesRouter } from './routes/matches.js';
 import { createMvpRouter } from './routes/mvp.js';
 import { createPlayersRouter } from './routes/players.js';
@@ -27,6 +26,8 @@ export const SOCKET_EVENTS = { stateUpdate: 'state:update', stateRequest: 'state
 // Reads are public so /display works without a secret. Everything that changes data, and the
 // private read-only endpoints below, require the admin secret when one is configured.
 const PRIVATE_READ_PREFIXES = ['/backups', '/audit-log'];
+// The Player Finish Audit is admin-only, so its per-player data is not readable without the secret.
+const PRIVATE_READ_PATTERNS = [/^\/matches\/\d+\/(player-audit|finish-events)\/?$/];
 
 function createAdminSecretGuard(adminSecret) {
   const digestOf = (text) => crypto.createHash('sha256').update(text).digest();
@@ -34,7 +35,8 @@ function createAdminSecretGuard(adminSecret) {
 
   return (req, res, next) => {
     const isRead = ['GET', 'HEAD', 'OPTIONS'].includes(req.method);
-    const isPrivateRead = PRIVATE_READ_PREFIXES.some((prefix) => req.path.startsWith(prefix));
+    const isPrivateRead = PRIVATE_READ_PREFIXES.some((prefix) => req.path.startsWith(prefix))
+      || PRIVATE_READ_PATTERNS.some((pattern) => pattern.test(req.path));
     if (adminSecret === '' || (isRead && !isPrivateRead)) return next();
 
     const provided = req.get('x-admin-secret') ?? '';
@@ -93,7 +95,6 @@ export function createApp({ db, config }) {
   app.use('/api/teams', createTeamsRouter(context));
   app.use('/api/players', createPlayersRouter(context));
   app.use('/api/matches', createMatchesRouter(context));
-  app.use('/api/finish-events', createFinishEventsRouter(context));
   app.use('/api/broadcast', createBroadcastRouter(context));
   app.use('/api/mvp', createMvpRouter(context));
   app.use('/api/backups', createBackupsRouter(context));

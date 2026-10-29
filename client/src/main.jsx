@@ -5,6 +5,7 @@ import App from './App.jsx';
 import './styles/variables.css';
 import './styles/global.css';
 import './styles/admin.css';
+import './styles/audit.css';
 import './styles/display.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(

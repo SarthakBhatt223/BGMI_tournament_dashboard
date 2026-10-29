@@ -100,20 +100,29 @@ describe('HTTP API and Socket.IO', () => {
     await waitFor(() => updates.length >= 1); // initial state on connect
     const updatesBefore = updates.length;
 
-    const added = await call('POST', `/matches/${matchId}/finish-events`, { teamId, playerId, requestId: 'api-1' });
-    assert.equal(added.status, 201);
+    const added = await call('POST', `/matches/${matchId}/teams/${teamId}/finishes`, { delta: 1, requestId: 'api-1' });
+    assert.equal(added.status, 200);
+    assert.equal(added.body.finishCount, 1);
     await waitFor(() => updates.length > updatesBefore);
     const latest = updates.at(-1);
     assert.equal(latest.standings.find((row) => row.teamId === teamId).finishPoints, 1);
     socket.close();
   });
 
-  it('repeating a finish request does not add a second finish', async () => {
-    const repeated = await call('POST', `/matches/${matchId}/finish-events`, { teamId, playerId, requestId: 'api-1' });
+  it('repeating a team finish request does not add a second finish', async () => {
+    const repeated = await call('POST', `/matches/${matchId}/teams/${teamId}/finishes`, { delta: 1, requestId: 'api-1' });
     assert.equal(repeated.status, 200);
     assert.equal(repeated.body.duplicate, true);
     const detail = await call('GET', `/matches/${matchId}`);
     assert.equal(detail.body.teams.find((team) => team.teamId === teamId).finishCount, 1);
+  });
+
+  it('rejects a team finish below zero over HTTP', async () => {
+    const otherTeam = (await call('GET', `/matches/${matchId}`)).body.teams.find((team) => team.teamId !== teamId);
+    const rejected = await call('POST', `/matches/${matchId}/teams/${otherTeam.teamId}/finishes`, { delta: -1, requestId: 'api-neg' });
+    assert.equal(rejected.status, 409);
+    const detail = await call('GET', `/matches/${matchId}`);
+    assert.equal(detail.body.teams.find((team) => team.teamId === otherTeam.teamId).finishCount, 0);
   });
 
   it('an invalid score update is rejected and nothing is published', async () => {
@@ -121,11 +130,51 @@ describe('HTTP API and Socket.IO', () => {
     await waitFor(() => updates.length >= 1);
     const updatesBefore = updates.length;
 
-    const rejected = await call('POST', `/matches/${matchId}/finish-events`, { teamId, playerId: 999999, requestId: 'api-bad' });
+    const rejected = await call('POST', `/matches/${matchId}/players/999999/finishes`, { delta: 1, requestId: 'api-bad' });
     assert.equal(rejected.status, 400);
     await new Promise((resolve) => setTimeout(resolve, 200));
     assert.equal(updates.length, updatesBefore);
     socket.close();
+  });
+
+  it('player audit is admin-only, reconciles, and does not change team points', async () => {
+    assert.equal((await call('GET', `/matches/${matchId}/player-audit`, undefined, { secret: '' })).status, 401);
+
+    const before = await call('GET', `/matches/${matchId}/player-audit`);
+    assert.equal(before.status, 200);
+    const teamBefore = before.body.teams.find((team) => team.teamId === teamId);
+    assert.equal(teamBefore.status, 'mismatch'); // team finishes 1, player total 0
+    assert.equal(teamBefore.difference, 1);
+
+    const { socket, updates } = connectClient();
+    await waitFor(() => updates.length >= 1);
+    const updatesBefore = updates.length;
+    const added = await call('POST', `/matches/${matchId}/players/${playerId}/finishes`, { delta: 1, requestId: 'api-player-1' });
+    assert.equal(added.status, 200);
+    assert.equal(added.body.finishes, 1);
+    assert.equal(added.body.audit.teams.find((team) => team.teamId === teamId).status, 'match');
+    assert.equal(added.body.audit.summary.teamsReconciled, 1);
+
+    await waitFor(() => updates.length > updatesBefore); // admin pages refresh from the broadcast
+    // Display clients still see only the team total, counted once.
+    assert.equal(updates.at(-1).standings.find((row) => row.teamId === teamId).finishPoints, 1);
+    assert.equal(JSON.stringify(updates.at(-1)).includes('player-audit'), false);
+    socket.close();
+
+    const rejected = await call('POST', `/matches/${matchId}/players/${playerId}/finishes`, { delta: -1, requestId: 'api-player-2' });
+    assert.equal(rejected.status, 200);
+    const again = await call('POST', `/matches/${matchId}/players/${playerId}/finishes`, { delta: -1, requestId: 'api-player-3' });
+    assert.equal(again.status, 409);
+    // Restore the matching state for the rest of the file.
+    await call('POST', `/matches/${matchId}/players/${playerId}/finishes`, { delta: 1, requestId: 'api-player-4' });
+  });
+
+  it('refuses to finalize an incomplete match and returns the reasons', async () => {
+    const rejected = await call('POST', `/matches/${matchId}/finalize`);
+    assert.equal(rejected.status, 422);
+    assert.ok(rejected.body.error.details.length > 0);
+    const detail = await call('GET', `/matches/${matchId}`);
+    assert.equal(detail.body.match.status, 'in_progress');
   });
 
   it('a reconnecting client receives the current state immediately', async () => {

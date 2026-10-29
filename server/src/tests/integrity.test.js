@@ -13,10 +13,12 @@ import { listAuditEntries } from '../services/auditService.js';
 import { createTeam, deleteTeam, listTeams } from '../services/rosterService.js';
 import { buildState } from '../services/stateService.js';
 import { computeStandings } from '../services/standingsService.js';
+import { adjustPlayerFinishes, getPlayerAudit } from '../services/playerAuditService.js';
+import { getTournamentConfig } from '../services/eventService.js';
 import {
-  addFinish, createMatch, finalizeMatch, getMatch, getMatchDetail, reopenMatch, setPlacement, startMatch,
+  adjustTeamFinishes, createMatch, finalizeMatch, getMatch, getMatchDetail, reopenMatch, setPlacement, startMatch,
 } from '../services/scoringService.js';
-import { changeScoring, createTestTournament, placeTeamsInOrder, startNewMatch } from './testHelpers.js';
+import { addTeamFinishes, adjustPlayer, changeScoring, createTestTournament, placeTeamsInOrder, startNewMatch } from './testHelpers.js';
 
 function assertAppError(work, status, messagePart) {
   assert.throws(work, (error) => {
@@ -30,7 +32,7 @@ function assertAppError(work, status, messagePart) {
 describe('database setup', () => {
   it('migrates a fresh database and is safe to run twice', () => {
     const db = openDatabase(':memory:');
-    assert.deepEqual(migrate(db), [1]);
+    assert.deepEqual(migrate(db), [1, 2]);
     assert.deepEqual(migrate(db), []);
     assert.equal(db.prepare('SELECT COUNT(*) AS n FROM events').get().n, 1);
     assert.equal(db.prepare('SELECT COUNT(*) AS n FROM broadcast_state').get().n, 1);
@@ -47,6 +49,34 @@ describe('database setup', () => {
     assert.deepEqual(migrate(reopened), []);
     reopened.close();
     fs.rmSync(directory, { recursive: true, force: true });
+  });
+
+  it('upgrades a version 1 database and keeps team finish totals and standings unchanged', () => {
+    const db = openDatabase(':memory:');
+    migrate(db, { targetVersion: 1 });
+    const eventId = db.prepare('SELECT id FROM events').get().id;
+    db.prepare("INSERT INTO teams (id, event_id, name) VALUES (1, ?, 'Old A'), (2, ?, 'Old B')").run(eventId, eventId);
+    db.prepare("INSERT INTO players (id, team_id, name) VALUES (1, 1, 'Old Player')").run();
+    db.prepare("INSERT INTO matches (id, event_id, match_number, status) VALUES (1, ?, 1, 'in_progress')").run(eventId);
+    const insertFinish = db.prepare('INSERT INTO finish_events (event_id, match_id, team_id, player_id, reversed_at) VALUES (?, 1, 1, 1, ?)');
+    insertFinish.run(eventId, null);
+    insertFinish.run(eventId, null);
+    insertFinish.run(eventId, '2026-01-01T00:00:00.000Z'); // an undone finish must not count
+
+    assert.deepEqual(migrate(db), [2]);
+    const row = db.prepare('SELECT finish_count, finish_entered FROM team_match_results WHERE match_id = 1 AND team_id = 1').get();
+    assert.deepEqual({ ...row }, { finish_count: 2, finish_entered: 1 });
+    assert.equal(computeStandings(db, eventId).find((entry) => entry.teamId === 1).finishPoints, 2);
+    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM finish_events').get().n, 3); // history kept
+  });
+
+  it('fills missing newer settings in an older saved configuration', () => {
+    const { db, eventId } = createTestTournament();
+    const saved = JSON.parse(db.prepare('SELECT config_json FROM event_config').get().config_json);
+    delete saved.scoring.requirePlayerReconciliationToFinalize;
+    saved.scoring.allowUnattributedFinishes = false; // key from the previous version
+    db.prepare('UPDATE event_config SET config_json = ?').run(JSON.stringify(saved));
+    assert.equal(getTournamentConfig(db, eventId).scoring.requirePlayerReconciliationToFinalize, true);
   });
 
   it('seeds clearly fictional placeholder teams once', () => {
@@ -80,23 +110,14 @@ describe('data integrity', () => {
     const [teamOne, teamTwo] = teams;
     const [playerOfTeamOne] = playersByTeamId.get(teamOne.id);
 
-    assertAppError(() => addFinish(db, match.id, { teamId: 9999, playerId: playerOfTeamOne.id }), 400, /Team 9999/);
-    assertAppError(() => addFinish(db, match.id, { teamId: teamOne.id, playerId: 9999 }), 400, /Player 9999/);
-    assertAppError(() => addFinish(db, match.id, { teamId: teamTwo.id, playerId: playerOfTeamOne.id }), 400, /does not belong/);
-    assertAppError(() => addFinish(db, match.id, { teamId: teamOne.id }), 400, /Select the player/);
+    assertAppError(() => adjustTeamFinishes(db, match.id, 9999, { delta: 1, requestId: 'r1' }), 400, /Team 9999/);
+    assertAppError(() => adjustPlayerFinishes(db, match.id, 9999, { delta: 1, requestId: 'r2' }), 400, /Player 9999/);
+    assertAppError(() => adjustPlayerFinishes(db, match.id, playerOfTeamOne.id, { delta: 1, requestId: 'r3', teamId: teamTwo.id }), 400, /does not belong/);
+    assertAppError(() => adjustPlayerFinishes(db, match.id, playerOfTeamOne.id, { delta: 1 }), 400, /requestId/);
+    assertAppError(() => adjustPlayerFinishes(db, match.id, playerOfTeamOne.id, { delta: 5, requestId: 'r4' }), 400, /delta/);
     assertAppError(() => setPlacement(db, match.id, 9999, { placement: 1 }), 400);
-    assert.equal(getMatchDetail(db, match.id).finishEvents.length, 0);
-  });
-
-  it('can record unattributed finishes only when explicitly enabled', () => {
-    const { db, eventId, teams } = createTestTournament();
-    const match = startNewMatch(db, eventId);
-    assertAppError(() => addFinish(db, match.id, { teamId: teams[0].id }), 400);
-    changeScoring(db, eventId, { allowUnattributedFinishes: true });
-    addFinish(db, match.id, { teamId: teams[0].id });
-    const line = getMatchDetail(db, match.id).teams.find((team) => team.teamId === teams[0].id);
-    assert.equal(line.finishCount, 1);
-    assert.equal(line.unattributedFinishCount, 1);
+    assert.equal(getPlayerAudit(db, match.id).summary.playerFinishesTotal, 0);
+    assert.equal(getMatchDetail(db, match.id).summary.finishTotalsEntered, 0);
   });
 
   it('rejects out-of-range placements and duplicate placements', () => {
@@ -123,7 +144,8 @@ describe('data integrity', () => {
     const { db, eventId, teams, playersByTeamId } = createTestTournament();
     const planned = createMatch(db, eventId, {});
     const [player] = playersByTeamId.get(teams[0].id);
-    assertAppError(() => addFinish(db, planned.id, { teamId: teams[0].id, playerId: player.id }), 409, /not started/);
+    assertAppError(() => adjustTeamFinishes(db, planned.id, teams[0].id, { delta: 1, requestId: 'p1' }), 409, /not started/);
+    assertAppError(() => adjustPlayerFinishes(db, planned.id, player.id, { delta: 1, requestId: 'p2' }), 409, /not started/);
   });
 
   it('makes a new match current only when no match is in progress', () => {
@@ -189,18 +211,17 @@ describe('data integrity', () => {
   });
 
   it('finalized results are frozen against later rule changes, and reopening is audited', () => {
-    const { db, eventId, teams, playersByTeamId } = createTestTournament();
+    const { db, eventId, teams } = createTestTournament();
     const match = startNewMatch(db, eventId);
     placeTeamsInOrder(db, match.id, teams);
-    const [player] = playersByTeamId.get(teams[0].id);
-    addFinish(db, match.id, { teamId: teams[0].id, playerId: player.id });
+    addTeamFinishes(db, match.id, teams[0].id, 1);
     finalizeMatch(db, match.id);
     const totalBefore = computeStandings(db, eventId)[0].totalPoints;
 
     changeScoring(db, eventId, { finishPointsPerElimination: 50 });
     assert.equal(computeStandings(db, eventId)[0].totalPoints, totalBefore);
 
-    assertAppError(() => addFinish(db, match.id, { teamId: teams[0].id, playerId: player.id }), 409, /finalized/);
+    assertAppError(() => adjustTeamFinishes(db, match.id, teams[0].id, { delta: 1, requestId: 'late' }), 409, /finalized/);
     assertAppError(() => reopenMatch(db, match.id, {}), 400, /reason/);
     reopenMatch(db, match.id, { reason: 'Operator entered a wrong placement' });
     assert.equal(getMatch(db, match.id).status, 'in_progress');
@@ -219,14 +240,21 @@ describe('data integrity', () => {
     assert.equal(listTeams(db, eventId).length, 3);
   });
 
-  it('keeps the team recorded on a finish when a player later changes team', () => {
+  it('keeps the team recorded on a player finish when the player later changes team', () => {
     const { db, eventId, teams, playersByTeamId } = createTestTournament();
     const match = startNewMatch(db, eventId);
     const [player] = playersByTeamId.get(teams[0].id);
-    addFinish(db, match.id, { teamId: teams[0].id, playerId: player.id });
+    addTeamFinishes(db, match.id, teams[0].id, 1);
+    adjustPlayer(db, match.id, player.id);
     db.prepare('UPDATE players SET team_id = ? WHERE id = ?').run(teams[1].id, player.id);
+
     const recorded = db.prepare('SELECT team_id FROM finish_events WHERE player_id = ?').get(player.id);
     assert.equal(recorded.team_id, teams[0].id);
+    const audit = getPlayerAudit(db, match.id);
+    const oldTeam = audit.teams.find((team) => team.teamId === teams[0].id);
+    assert.equal(oldTeam.playerTotal, 1); // history is not rewritten
+    assert.equal(oldTeam.players.find((entry) => entry.playerId === player.id).onRoster, false);
+    assert.equal(audit.teams.find((team) => team.teamId === teams[1].id).playerTotal, 0);
     const standings = new Map(computeStandings(db, eventId).map((row) => [row.teamId, row]));
     assert.equal(standings.get(teams[0].id).finishPoints, 1);
     assert.equal(standings.get(teams[1].id).finishPoints, 0);
@@ -248,7 +276,7 @@ describe('broadcast state and MVP', () => {
     const { db, eventId, teams, playersByTeamId } = createTestTournament();
     const match = startNewMatch(db, eventId);
     const [topFragger, otherPlayer] = [playersByTeamId.get(teams[0].id)[0], playersByTeamId.get(teams[1].id)[0]];
-    addFinish(db, match.id, { teamId: teams[0].id, playerId: topFragger.id });
+    adjustPlayer(db, match.id, topFragger.id);
     const mediaDirectory = os.tmpdir();
 
     assert.equal(buildState(db, { mediaDirectory }).mvp, null);
@@ -283,7 +311,7 @@ describe('state publishing', () => {
       emitState: (state) => published.push(state),
     });
     const match = createMatch(db, 1, {}); // planned, so scoring is rejected
-    assert.throws(() => publisher.commit(() => addFinish(db, match.id, { teamId: teams[0].id, playerId: 1 })));
+    assert.throws(() => publisher.commit(() => adjustTeamFinishes(db, match.id, teams[0].id, { delta: 1, requestId: 'no-publish' })));
     assert.equal(published.length, 0);
   });
 
@@ -301,17 +329,16 @@ describe('state publishing', () => {
   });
 
   it('a reconnecting client can rebuild the full display and scoring state', () => {
-    const { db, eventId, teams, playersByTeamId } = createTestTournament();
+    const { db, eventId, teams } = createTestTournament();
     const match = startNewMatch(db, eventId);
-    const [player] = playersByTeamId.get(teams[0].id);
-    addFinish(db, match.id, { teamId: teams[0].id, playerId: player.id });
+    addTeamFinishes(db, match.id, teams[0].id, 1);
     updateBroadcastState(db, eventId, { mode: 'standings', leaderboardLayout: 'scrolling' });
 
     const recovered = buildState(db, { mediaDirectory: os.tmpdir() });
     assert.equal(recovered.broadcast.mode, 'standings');
     assert.equal(recovered.broadcast.leaderboardLayout, 'scrolling');
     assert.equal(recovered.currentMatch.match.id, match.id);
-    assert.equal(recovered.currentMatch.lastUndoableFinishEventId !== null, true);
+    assert.equal(recovered.currentMatch.teams.find((team) => team.teamId === teams[0].id).finishCount, 1);
     assert.equal(recovered.standings[0].teamId, teams[0].id);
   });
 
@@ -330,11 +357,45 @@ describe('backup and restore', () => {
     const match = startNewMatch(db, eventId);
     placeTeamsInOrder(db, match.id, teams);
     const [player] = playersByTeamId.get(teams[1].id);
-    addFinish(db, match.id, { teamId: teams[1].id, playerId: player.id, requestId: 'backup-test' });
+    addTeamFinishes(db, match.id, teams[1].id, 1);
+    adjustPlayer(db, match.id, player.id);
     finalizeMatch(db, match.id);
     selectMvp(db, eventId, player.id);
     return tournament;
   }
+
+  it('round-trips team finish totals and the player ledger, including undone finishes', () => {
+    const { db, eventId, teams, playersByTeamId } = tournamentWithScores();
+    const [player] = playersByTeamId.get(teams[1].id);
+    const history = db.prepare('SELECT COUNT(*) AS n FROM finish_events').get().n;
+    const backup = JSON.parse(JSON.stringify(exportBackup(db)));
+    assert.equal(backup.version, 2);
+
+    const target = createTestTournament({ teamCount: 2 });
+    restoreBackup(target.db, backup);
+    assert.equal(target.db.prepare('SELECT COUNT(*) AS n FROM finish_events').get().n, history);
+    const line = getMatchDetail(target.db, 1).teams.find((team) => team.teamId === teams[1].id);
+    assert.equal(line.finishCount, 1);
+    assert.equal(getPlayerAudit(target.db, 1).teams.find((team) => team.teamId === teams[1].id)
+      .players.find((entry) => entry.playerId === player.id).finishes, 1);
+    assert.equal(eventId, target.eventId);
+  });
+
+  it('restores a version 1 backup by deriving team finish totals from the ledger', () => {
+    const { db } = tournamentWithScores();
+    const v2 = JSON.parse(JSON.stringify(exportBackup(db)));
+    const v1 = structuredClone(v2);
+    v1.version = 1;
+    for (const row of v1.tables.team_match_results) {
+      delete row.finish_count;
+      delete row.finish_entered;
+    }
+    assert.deepEqual(validateBackup(v1), []);
+
+    const target = createTestTournament({ teamCount: 2 });
+    restoreBackup(target.db, v1);
+    assert.deepEqual(computeStandings(target.db, 1), computeStandings(db, 1));
+  });
 
   it('exports a backup that validates and survives a JSON round trip', () => {
     const { db } = tournamentWithScores();

@@ -1,15 +1,12 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { addFinish, createMatch, finalizeMatch, setPlacement, startMatch } from '../services/scoringService.js';
+import { createMatch, finalizeMatch, setPlacement, startMatch } from '../services/scoringService.js';
 import { updateTeam } from '../services/rosterService.js';
 import { computeStandings, splitIntoPages } from '../services/standingsService.js';
-import { changeScoring, createTestTournament, placeTeamsInOrder, startNewMatch } from './testHelpers.js';
+import { addTeamFinishes, changeScoring, createTestTournament, placeTeamsInOrder, startNewMatch } from './testHelpers.js';
 
-function finishCountOf(db, matchId, team, playersByTeamId, count) {
-  const [player] = playersByTeamId.get(team.id);
-  for (let index = 0; index < count; index += 1) {
-    addFinish(db, matchId, { teamId: team.id, playerId: player.id });
-  }
+function finishCountOf(db, matchId, team, _playersByTeamId, count) {
+  addTeamFinishes(db, matchId, team.id, count);
 }
 
 describe('standings', () => {

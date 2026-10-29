@@ -24,6 +24,19 @@
   --display-rank-2: #aeb6bf;
   --display-rank-3: #b87a45;
 
+  /* Player Finish Audit (dark charcoal with orange actions, green reconciled, amber/red problems) */
+  --audit-bg: #171a20;
+  --audit-surface: #1f232b;
+  --audit-surface-raised: #262b35;
+  --audit-border: #343a46;
+  --audit-text: #eef0f3;
+  --audit-muted: #98a1ae;
+  --audit-orange: #ff7a1a;
+  --audit-orange-text: #1a1006;
+  --audit-green: #35c46a;
+  --audit-amber: #f2b01e;
+  --audit-red: #ef5350;
+
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;

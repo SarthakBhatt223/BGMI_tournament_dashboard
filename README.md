@@ -124,6 +124,9 @@ To use another file name, change `display.ambientVideoFile` in Settings. See
 - **Restore from backup file** validates the file on the server first (format, version, types,
   references, duplicate keys, configuration). An invalid file changes nothing. A valid file
   **replaces everything** after you confirm, inside one database transaction.
+- Backup format version 2 stores team finish totals. Version 1 files (made before the Player
+  Finish Audit existed) are still accepted: team totals are rebuilt from the finish ledger,
+  so standings are unchanged.
 - Make an export before the event, after each match, and keep a copy on another device.
 
 ## What the organizer must configure
@@ -132,7 +135,7 @@ Search the code for `TODO: CONFIGURE HERE`. The main items:
 
 | Value | Where |
 | --- | --- |
-| Placement-point table (**placeholder**, not the official one), finish points, WWCD placement, tie-breakers, duplicate-placement and unattributed-finish rules | `server/src/services/defaultTournamentConfig.js`, or Admin > Settings after the first start |
+| Placement-point table (**placeholder**, not the official one), finish points, WWCD placement, tie-breakers, duplicate-placement rule, whether player finishes must reconcile before finalizing (`requirePlayerReconciliationToFinalize`) | `server/src/services/defaultTournamentConfig.js`, or Admin > Settings after the first start |
 | Event name, club name | Admin > Settings (default in `server/src/db/migrate.js`) |
 | Ambient video path/name, scroll page size and default interval | Settings (`display.*`) and `public/media/` |
 | Players per team (warning only), tagline | Settings (`roster`, `branding`) |
@@ -146,12 +149,20 @@ scores are frozen. To re-score one, reopen it (with a reason) and finalize it ag
 
 ## How scoring works
 
-- Finishes are recorded one by one in a ledger (`finish_events`). Player and team finish
-  counts and finish points are **derived** from it, never stored separately, so a finish
-  cannot be counted twice. Undo marks a ledger row as reversed; rows are never deleted.
-- Each add-finish request carries a `requestId`. Repeating it (double click, retry) returns the
-  original finish instead of adding another. Undo targets one specific finish, so a double
-  click cannot undo two.
+- **Team finishes** (Scoring tab) are one stored number per team and match
+  (`team_match_results.finish_count`), changed with `-` / `+` (`POST /matches/:id/teams/:teamId/finishes`).
+  This is the **only** number that produces finish points and feeds the standings. The backend
+  rejects a change below zero (409) and above `maxFinishesPerMatch`.
+- **Player finishes** (Player Finish Audit tab) are entered afterwards from the official
+  results and live in the `finish_events` ledger (one row per finish; `-` marks the latest row
+  reversed, nothing is deleted). They never create team points; they are only compared with the
+  team total, so a finish cannot be counted twice.
+- Every `-` / `+` request carries a fresh `requestId`. Repeating the *same* id (network retry)
+  changes nothing and returns the first answer with `"duplicate": true`; a deliberate second
+  click has a new id and counts. A request that fails is rolled back and its id is not used up.
+- Reconciliation per team is calculated from saved data only: `MATCH` (totals equal),
+  `MISMATCH` (they differ; the difference is shown) or `INCOMPLETE` (no registered players).
+  Nothing is ever corrected automatically.
 - Placement points come from the configured table. WWCD means the configured winning
   placement. Total = placement points + finish points.
 - Standings sort by total points, then the configured tie-breakers in order, then team id.
@@ -160,10 +171,31 @@ scores are frozen. To re-score one, reopen it (with a reason) and finalize it ag
 - Standings include finalized matches and, by default, the match in progress (live standings;
   switch off with `countInProgressMatchInStandings`). Inactive teams are left out.
 - A match goes planned > in progress > finalized. Only one match can be in progress.
-  Finalizing checks placements (all teams, no duplicates unless allowed), finish limits and that
-  player and team numbers agree, then freezes the scores. A finalized match cannot be finalized
+  Finalizing checks placements (all teams, no duplicates unless allowed), finish limits and, when
+  `requirePlayerReconciliationToFinalize` is on (default), that every team's player total equals
+  its team finishes (a team with finishes but no registered players also blocks). It then freezes
+  the scores. The reasons are listed by team name; nothing is finalized silently. A finalized match cannot be finalized
   again. Corrections go through **Reopen** (reason required, previous scores kept in the audit log).
 - The MVP is chosen manually. The finish ranking is shown only as a supporting statistic.
+
+## Upgrading an existing database
+
+Starting the server applies migration 2 automatically. It adds `finish_count` / `finish_entered`
+to `team_match_results` and copies each team's existing finish count into it (unreversed ledger
+rows, including finalized matches), so standings and finalized scores stay the same. No rows are
+deleted. The old attributed finishes remain as player finishes, so existing matches already
+reconcile. Saved configurations get the new `requirePlayerReconciliationToFinalize` default
+(`true`); the removed `allowUnattributedFinishes` setting is ignored. **Export a backup before
+upgrading a database that holds real data.**
+
+## Player Finish Audit workflow
+
+1. Scoring tab: enter team finishes (`-` / `+`) and placements during or after the match.
+2. Player Finish Audit tab: pick the match, expand a team, enter each player's finishes.
+3. Check the header per team (`Team finishes`, `Player total`, status) and the
+   "Teams reconciled" summary. Fix whichever side is wrong; the audit never edits team scores.
+4. Finalize in the Scoring tab. A finalized match is locked for both tabs; use **Reopen** (reason
+   required) to correct it. Player finishes are admin-only and are not part of `/display`.
 
 ## Real-time protocol
 
@@ -177,7 +209,8 @@ all changes go through the REST API, which is protected by the admin secret.
 ## API reference
 
 All routes are under `/api`. Errors return `{ "error": { "code", "message", "details" } }`.
-Reads are public; all other methods and `GET /backups/*`, `GET /audit-log` need the
+Reads are public; all other methods and `GET /backups/*`, `GET /audit-log`,
+`GET /matches/:id/player-audit` and `GET /matches/:id/finish-events` need the
 `x-admin-secret` header when `ADMIN_SECRET` is set.
 
 | Method and path | Purpose |
@@ -194,8 +227,10 @@ Reads are public; all other methods and `GET /backups/*`, `GET /audit-log` need 
 | `GET, POST /matches`; `GET /matches/:id` | Matches and the scoreboard of one match |
 | `POST /matches/:id/start`, `/finalize`, `/reopen` | Match lifecycle (`reopen` needs `{ "reason" }`) |
 | `PUT, DELETE /matches/:id/results/:teamId` | Set `{ "placement" }` / clear it |
-| `GET, POST /matches/:id/finish-events` | Add `{ teamId, playerId, requestId }` |
-| `POST /finish-events/:id/undo`; `PATCH /finish-events/:id` | Undo; correct player `{ playerId }` |
+| `POST /matches/:id/teams/:teamId/finishes` | Team finish total `{ delta: 1 or -1, requestId }` |
+| `GET /matches/:id/player-audit` | Per-team reconciliation and player finishes (admin secret) |
+| `POST /matches/:id/players/:playerId/finishes` | Player finish `{ delta, requestId, teamId? }`; returns the refreshed audit |
+| `GET /matches/:id/finish-events` | Player finish ledger including undone rows (admin secret) |
 | `GET /standings`; `GET /player-stats?search=` | Standings with scroll pages; player statistics |
 | `GET, PUT /broadcast` | Mode (`ambient`, `standings`, `mvp`), layout, interval, text, current match |
 | `GET, PUT /mvp` | `{ "playerId": id or null }` |

@@ -7,6 +7,14 @@ import { defaultTournamentConfig } from '../services/defaultTournamentConfig.js'
 
 const NOW = "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')";
 
+// Before migration 2 a team's finish total was the number of unreversed rows in finish_events.
+// This copies those totals into team_match_results so existing standings do not change.
+// Also used when restoring a version 1 backup.
+export const BACKFILL_TEAM_FINISHES_SQL = `
+  INSERT INTO team_match_results (match_id, team_id, finish_count, finish_entered)
+  SELECT match_id, team_id, COUNT(*), 1 FROM finish_events WHERE reversed_at IS NULL GROUP BY match_id, team_id
+  ON CONFLICT (match_id, team_id) DO UPDATE SET finish_count = excluded.finish_count, finish_entered = 1`;
+
 const migrations = [
   {
     version: 1,
@@ -120,9 +128,27 @@ const migrations = [
       );
     `,
   },
+  {
+    version: 2,
+    name: 'stored team finish totals and score request ids',
+    sql: `
+      ALTER TABLE team_match_results ADD COLUMN finish_count INTEGER NOT NULL DEFAULT 0 CHECK (finish_count >= 0);
+      ALTER TABLE team_match_results ADD COLUMN finish_entered INTEGER NOT NULL DEFAULT 0 CHECK (finish_entered IN (0, 1));
+
+      ${BACKFILL_TEAM_FINISHES_SQL};
+
+      -- Remembers every processed +/- request so a retry or double submit changes nothing twice.
+      CREATE TABLE score_requests (
+        request_id TEXT PRIMARY KEY,
+        signature TEXT NOT NULL,
+        response_json TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (${NOW})
+      );
+    `,
+  },
 ];
 
-export function migrate(db) {
+export function migrate(db, { targetVersion = Infinity } = {}) {
   db.exec(`CREATE TABLE IF NOT EXISTS schema_migrations (
     version INTEGER PRIMARY KEY,
     name TEXT NOT NULL,
@@ -134,7 +160,7 @@ export function migrate(db) {
   );
   const appliedNow = [];
   for (const migration of migrations) {
-    if (appliedVersions.has(migration.version)) continue;
+    if (appliedVersions.has(migration.version) || migration.version > targetVersion) continue;
     runInTransaction(db, () => {
       db.exec(migration.sql);
       db.prepare('INSERT INTO schema_migrations (version, name) VALUES (?, ?)').run(migration.version, migration.name);

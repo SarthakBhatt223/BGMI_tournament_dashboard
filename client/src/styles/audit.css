@@ -1,0 +1,441 @@
+/* Match Scoring additions (light admin theme) and the Player Finish Audit tab (dark theme).
+   The audit styles are scoped to .audit-root so nothing else on the admin page changes. */
+
+/* ---------- Match scoring ---------- */
+.scoring-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-3);
+}
+
+.scoring-header h2 {
+  margin-bottom: var(--space-1);
+}
+
+.scoring-header p {
+  margin: 0;
+}
+
+.scoring-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+  margin: 0;
+}
+
+.scoring-facts dt {
+  font-size: 0.8rem;
+  color: var(--color-muted);
+}
+
+.scoring-facts dd {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.scoring-warnings {
+  margin: 0 0 var(--space-3);
+  padding-left: var(--space-5);
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+.scoring-table td,
+.scoring-table th {
+  vertical-align: middle;
+}
+
+.scoring-table tfoot td {
+  font-weight: 600;
+  border-top: 2px solid var(--color-border);
+}
+
+.row-duplicate td {
+  background: var(--color-error-bg);
+}
+
+.row-missing td {
+  background: var(--color-warning-bg);
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px var(--space-2);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.badge-provisional {
+  background: var(--color-warning-bg);
+  color: #6d4c00;
+}
+
+.badge-final {
+  background: #dff3e6;
+  color: #145c2e;
+}
+
+.wwcd-badge {
+  margin-left: var(--space-2);
+}
+
+.flag {
+  margin-left: var(--space-2);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.flag-error {
+  color: var(--color-danger);
+}
+
+.flag-warning {
+  color: #8a5a00;
+}
+
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.stepper-button {
+  min-width: 36px;
+  padding: var(--space-1) var(--space-2);
+  font-size: 1.15rem;
+  line-height: 1.2;
+}
+
+.stepper-value {
+  min-width: 2ch;
+  text-align: center;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.row-status {
+  min-width: 6ch;
+  font-size: 0.8rem;
+  color: var(--color-muted);
+}
+
+.row-status-error {
+  color: var(--color-danger);
+}
+
+.row-status-saved {
+  color: #145c2e;
+}
+
+/* ---------- Player Finish Audit (dark) ---------- */
+.audit-root {
+  padding: var(--space-4);
+  border-radius: var(--radius);
+  background: var(--audit-bg);
+  color: var(--audit-text);
+}
+
+.audit-root h2 {
+  margin-bottom: var(--space-1);
+}
+
+.audit-root label {
+  color: var(--audit-muted);
+}
+
+.audit-root input,
+.audit-root select {
+  background: var(--audit-surface);
+  border-color: var(--audit-border);
+  color: var(--audit-text);
+}
+
+.audit-root input:focus-visible,
+.audit-root select:focus-visible,
+.audit-root button:focus-visible {
+  outline: 2px solid var(--audit-orange);
+  outline-offset: 2px;
+}
+
+.audit-root button {
+  border-color: var(--audit-border);
+  background: var(--audit-surface-raised);
+  color: var(--audit-text);
+}
+
+.audit-muted {
+  margin: 0;
+  color: var(--audit-muted);
+  font-size: 0.85rem;
+}
+
+.audit-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.audit-field select {
+  min-width: 260px;
+}
+
+.audit-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--audit-border);
+  border-radius: var(--radius);
+  background: var(--audit-surface);
+}
+
+.audit-summary > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.audit-summary strong {
+  font-size: 1.25rem;
+}
+
+.audit-summary-main strong {
+  font-size: 1.6rem;
+}
+
+.audit-summary-label {
+  font-size: 0.75rem;
+  color: var(--audit-muted);
+}
+
+.audit-ok {
+  color: var(--audit-green);
+}
+
+.audit-warn {
+  color: var(--audit-amber);
+}
+
+.audit-bad {
+  color: var(--audit-red);
+}
+
+.audit-search {
+  margin-bottom: var(--space-3);
+}
+
+.audit-search input {
+  width: 100%;
+}
+
+.audit-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.audit-note {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-left: 3px solid var(--audit-border);
+  border-radius: var(--radius);
+  background: var(--audit-surface);
+  font-size: 0.9rem;
+}
+
+.audit-note-warning {
+  border-left-color: var(--audit-amber);
+}
+
+.audit-note-error {
+  border-left-color: var(--audit-red);
+}
+
+.audit-lock {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.audit-root .audit-button,
+.audit-root .audit-step-primary {
+  border-color: var(--audit-orange);
+  background: var(--audit-orange);
+  color: var(--audit-orange-text);
+  font-weight: 600;
+}
+
+.audit-teams,
+.audit-players {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.audit-teams {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.audit-team {
+  border: 1px solid var(--audit-border);
+  border-left-width: 4px;
+  border-radius: var(--radius);
+  background: var(--audit-surface);
+}
+
+.audit-team-match {
+  border-left-color: var(--audit-green);
+}
+
+.audit-team-mismatch {
+  border-left-color: var(--audit-red);
+}
+
+.audit-team-incomplete {
+  border-left-color: var(--audit-amber);
+}
+
+.audit-root .audit-team-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  width: 100%;
+  padding: var(--space-3);
+  border: none;
+  background: transparent;
+  text-align: left;
+}
+
+.audit-team-name {
+  flex: 1 1 200px;
+  font-weight: 700;
+}
+
+.audit-tag {
+  margin-left: var(--space-2);
+  padding: 1px 6px;
+  border: 1px solid var(--audit-border);
+  border-radius: var(--radius);
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--audit-muted);
+}
+
+.audit-figure {
+  font-size: 0.9rem;
+  color: var(--audit-muted);
+}
+
+.audit-figure strong {
+  color: var(--audit-text);
+}
+
+.audit-figure-diff strong {
+  color: var(--audit-red);
+}
+
+.audit-chip {
+  min-width: 96px;
+  padding: 2px var(--space-2);
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  text-align: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.audit-chip-match {
+  color: var(--audit-green);
+}
+
+.audit-chip-mismatch {
+  color: var(--audit-red);
+}
+
+.audit-chip-incomplete {
+  color: var(--audit-amber);
+}
+
+.audit-team-body {
+  padding: 0 var(--space-3) var(--space-3);
+}
+
+.audit-player {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--audit-border);
+}
+
+.audit-player-name {
+  display: flex;
+  flex: 1 1 200px;
+  flex-direction: column;
+}
+
+.audit-stepper {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.audit-root .audit-step {
+  min-width: 52px;
+  min-height: 44px;
+  padding: 0;
+  font-size: 1.6rem;
+  line-height: 1;
+}
+
+.audit-count {
+  min-width: 3ch;
+  text-align: center;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.audit-row-status {
+  min-width: 9ch;
+  font-size: 0.8rem;
+  color: var(--audit-muted);
+}
+
+.audit-row-status-saved {
+  color: var(--audit-green);
+}
+
+.audit-row-status-error {
+  color: var(--audit-red);
+}
+
+@media (max-width: 640px) {
+  .audit-root {
+    padding: var(--space-3);
+  }
+
+  .audit-field select {
+    min-width: 0;
+    width: 100%;
+  }
+}

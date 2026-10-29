@@ -2,10 +2,13 @@
 import { openDatabase } from '../db/database.js';
 import { migrate } from '../db/migrate.js';
 import { getActiveEvent, getTournamentConfig, updateTournamentConfig } from '../services/eventService.js';
+import { adjustPlayerFinishes } from '../services/playerAuditService.js';
 import { createPlayer, createTeam } from '../services/rosterService.js';
-import { createMatch, setPlacement, startMatch } from '../services/scoringService.js';
+import { adjustTeamFinishes, createMatch, setPlacement, startMatch } from '../services/scoringService.js';
 
-export function createTestTournament({ teamCount = 4, playersPerTeam = 2 } = {}) {
+// requireReconciliation is off by default so tests about team scoring do not need to enter
+// player finishes too. Audit tests switch it on to test the production default behavior.
+export function createTestTournament({ teamCount = 4, playersPerTeam = 2, requireReconciliation = false } = {}) {
   const db = openDatabase(':memory:');
   migrate(db);
   const event = getActiveEvent(db);
@@ -21,6 +24,7 @@ export function createTestTournament({ teamCount = 4, playersPerTeam = 2 } = {})
     }
     playersByTeamId.set(team.id, players);
   }
+  changeScoring(db, event.id, { requirePlayerReconciliationToFinalize: requireReconciliation });
   return { db, eventId: event.id, teams, playersByTeamId };
 }
 
@@ -41,3 +45,14 @@ export function placeTeamsInOrder(db, matchId, teams) {
 
 let requestCounter = 0;
 export const nextRequestId = () => `test-request-${(requestCounter += 1)}`;
+
+// Each call is a separate deliberate click with its own request id.
+export function addTeamFinishes(db, matchId, teamId, count = 1) {
+  for (let click = 0; click < count; click += 1) {
+    adjustTeamFinishes(db, matchId, teamId, { delta: 1, requestId: nextRequestId() });
+  }
+}
+
+export function adjustPlayer(db, matchId, playerId, delta = 1, extra = {}) {
+  return adjustPlayerFinishes(db, matchId, playerId, { delta, requestId: nextRequestId(), ...extra });
+}
