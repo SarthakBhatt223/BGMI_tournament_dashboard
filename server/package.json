@@ -1,0 +1,24 @@
+{
+  "name": "bgmi-tournament-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "dev": "node --watch --disable-warning=ExperimentalWarning --env-file-if-exists=../.env src/index.js",
+    "start": "node --disable-warning=ExperimentalWarning --env-file-if-exists=../.env src/index.js",
+    "db:migrate": "node --disable-warning=ExperimentalWarning --env-file-if-exists=../.env src/db/migrate.js",
+    "db:seed": "node --disable-warning=ExperimentalWarning --env-file-if-exists=../.env src/db/seed.js",
+    "db:reset": "node --disable-warning=ExperimentalWarning --env-file-if-exists=../.env src/db/reset.js",
+    "test": "node --test --disable-warning=ExperimentalWarning \"src/tests/*.test.js\""
+  },
+  "dependencies": {
+    "express": "4.21.2",
+    "socket.io": "4.8.1"
+  },
+  "devDependencies": {
+    "socket.io-client": "4.8.1"
+  }
+}

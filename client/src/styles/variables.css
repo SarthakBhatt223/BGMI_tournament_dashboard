@@ -1,0 +1,36 @@
+/* Design tokens. The final visual identity (tactical black/orange/green) can be applied by
+   changing only the values in this file. */
+:root {
+  /* TODO: CONFIGURE HERE - brand colours (neutral placeholders for now) */
+  --color-bg: #f4f5f7;
+  --color-surface: #ffffff;
+  --color-text: #1b1f24;
+  --color-muted: #5c6670;
+  --color-border: #d3d8de;
+  --color-accent: #2f5d9e;
+  --color-accent-text: #ffffff;
+  --color-danger: #a12626;
+  --color-warning-bg: #fff4d6;
+  --color-error-bg: #fde4e4;
+  --color-info-bg: #e3eefc;
+
+  /* Public display (dark) */
+  --display-bg: #101214;
+  --display-surface: #1a1d21;
+  --display-text: #f1f3f5;
+  --display-muted: #9aa3ad;
+  --display-border: #2c3138;
+  --display-rank-1: #d4a933;
+  --display-rank-2: #aeb6bf;
+  --display-rank-3: #b87a45;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+
+  --font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-size-base: 15px;
+  --radius: 4px;
+}

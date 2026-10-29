@@ -1,0 +1,24 @@
+# dependencies and build output
+node_modules/
+client/dist/
+
+# local databases and runtime data
+data/*
+!data/.gitkeep
+*.db
+*.db-shm
+*.db-wal
+
+# uploaded and supplied media (keep the README that explains the folder)
+public/media/*
+!public/media/README.md
+
+# secrets, logs, temporary files
+.env
+.env.*
+!.env.example
+*.log
+npm-debug.log*
+.DS_Store
+.vite/
+coverage/
