@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { createMatch, finalizeMatch, setPlacement, startMatch } from '../services/scoringService.js';
 import { updateTeam } from '../services/rosterService.js';
-import { computeStandings, splitIntoPages } from '../services/standingsService.js';
+import { computeStandings, pageIndexForAppearance, splitIntoPages } from '../services/standingsService.js';
 import { addTeamFinishes, changeScoring, createTestTournament, placeTeamsInOrder, startNewMatch } from './testHelpers.js';
 
 function finishCountOf(db, matchId, team, _playersByTeamId, count) {
@@ -100,32 +100,58 @@ describe('standings', () => {
   });
 });
 
-describe('scrolling pages', () => {
+describe('leaderboard pagination', () => {
   const makeItems = (count) => Array.from({ length: count }, (_, index) => index + 1);
+  const flat = (pages) => pages.flat();
 
-  function assertCoversEveryItem(items, pages) {
-    const shown = new Set(pages.flat());
-    assert.deepEqual([...shown].sort((a, b) => a - b), items);
-  }
-
-  it('splits 18 teams into two pages of nine', () => {
-    const items = makeItems(18);
-    const pages = splitIntoPages(items, 9);
-    assert.deepEqual(pages.map((page) => page.length), [9, 9]);
-    assertCoversEveryItem(items, pages);
+  it('splits 20 teams into ranks 1-10 and 11-20', () => {
+    const pages = splitIntoPages(makeItems(20), 10);
+    assert.equal(pages.length, 2);
+    assert.deepEqual(pages[0], makeItems(10));
+    assert.deepEqual(pages[1], makeItems(20).slice(10));
   });
 
-  it('covers every team when the count is not a multiple of the page size', () => {
-    for (const count of [10, 19, 20, 25]) {
-      const items = makeItems(count);
-      const pages = splitIntoPages(items, 9);
-      assert.ok(pages.every((page) => page.length === 9), `all pages full for ${count} teams`);
-      assertCoversEveryItem(items, pages);
+  it('never repeats, skips or reorders a team, for any team count and page size', () => {
+    for (const pageSize of [1, 3, 7, 9, 10, 20, 50]) {
+      for (const count of [0, 1, 2, 9, 10, 11, 18, 19, 20, 21, 25, 30, 40, 101]) {
+        const items = makeItems(count);
+        const pages = splitIntoPages(items, pageSize);
+        assert.deepEqual(flat(pages), items, `count ${count}, size ${pageSize}`);
+        assert.equal(pages.length, Math.ceil(count / pageSize), `page count for ${count}/${pageSize}`);
+        assert.ok(pages.every((page) => page.length >= 1 && page.length <= pageSize));
+      }
     }
   });
 
-  it('returns one short page for few teams and no pages for none', () => {
-    assert.deepEqual(splitIntoPages(makeItems(5), 9), [makeItems(5)]);
-    assert.deepEqual(splitIntoPages([], 9), []);
+  it('follows the real team count instead of assuming two pages', () => {
+    assert.deepEqual(splitIntoPages(makeItems(0), 10), []);
+    assert.deepEqual(splitIntoPages(makeItems(5), 10).map((page) => page.length), [5]);
+    assert.deepEqual(splitIntoPages(makeItems(10), 10).map((page) => page.length), [10]);
+    assert.deepEqual(splitIntoPages(makeItems(21), 10).map((page) => page.length), [10, 10, 1]);
+    assert.deepEqual(splitIntoPages(makeItems(25), 10).map((page) => page.length), [10, 10, 5]);
+    assert.deepEqual(splitIntoPages(makeItems(30), 10).map((page) => page.length), [10, 10, 10]);
+    assert.deepEqual(splitIntoPages(makeItems(20), 7).map((page) => page.length), [7, 7, 6]);
+  });
+
+  it('falls back to one team per page for an invalid page size instead of looping forever', () => {
+    for (const bad of [0, -3, 2.5, NaN, undefined, null]) {
+      assert.equal(splitIntoPages(makeItems(3), bad).length, 3);
+    }
+  });
+
+  it('shows page 1 on the first appearance, then alternates and wraps', () => {
+    assert.deepEqual([0, 1, 2, 3, 4, 5].map((appearance) => pageIndexForAppearance(appearance, 2)), [0, 0, 1, 0, 1, 0]);
+    assert.deepEqual([1, 2, 3, 4, 5, 6, 7].map((appearance) => pageIndexForAppearance(appearance, 3)), [0, 1, 2, 0, 1, 2, 0]);
+    assert.equal(pageIndexForAppearance(9, 1), 0);
+    assert.equal(pageIndexForAppearance(5, 0), 0);
+  });
+
+  it('always returns a valid page when the page count changes between appearances', () => {
+    for (let appearance = 0; appearance < 40; appearance += 1) {
+      for (const pageCount of [1, 2, 3, 4, 10]) {
+        const index = pageIndexForAppearance(appearance, pageCount);
+        assert.ok(index >= 0 && index < pageCount);
+      }
+    }
   });
 });

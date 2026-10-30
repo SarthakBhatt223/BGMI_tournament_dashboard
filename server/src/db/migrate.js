@@ -146,6 +146,47 @@ const migrations = [
       );
     `,
   },
+  {
+    version: 3,
+    name: 'leaderboard appearance counter',
+    // Counts how many times the leaderboard has been put on the display, so the compact
+    // leaderboard can show the next page on each successive appearance (kept by the server so
+    // every display and every reload agrees).
+    sql: `
+      ALTER TABLE broadcast_state ADD COLUMN leaderboard_appearance INTEGER NOT NULL DEFAULT 0 CHECK (leaderboard_appearance >= 0);
+    `,
+  },
+  {
+    version: 4,
+    name: 'elimination events and scheduled leaderboard counter',
+    sql: `
+      -- "Team A was eliminated by Team B". A broadcast/audit record only: it never changes
+      -- finishes, kills or points (those stay in team_match_results and finish_events).
+      -- Rows are never deleted; a mistaken event is voided instead.
+      CREATE TABLE elimination_events (
+        id INTEGER PRIMARY KEY,
+        match_id INTEGER NOT NULL REFERENCES matches(id),
+        eliminated_team_id INTEGER NOT NULL REFERENCES teams(id),
+        credited_team_id INTEGER NOT NULL REFERENCES teams(id),
+        credited_player_id INTEGER REFERENCES players(id),
+        status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'voided')),
+        recorded_by TEXT,
+        metadata_json TEXT NOT NULL DEFAULT '{}',
+        void_reason TEXT,
+        voided_at TEXT,
+        created_at TEXT NOT NULL DEFAULT (${NOW}),
+        CHECK (eliminated_team_id != credited_team_id)
+      );
+      CREATE INDEX idx_elimination_events_match ON elimination_events(match_id);
+      -- A team can only be eliminated once per match (unless the earlier event was voided).
+      CREATE UNIQUE INDEX idx_elimination_once_per_team
+        ON elimination_events(match_id, eliminated_team_id) WHERE status = 'active';
+
+      -- How many scheduled leaderboard appearances there have been, so the pages keep
+      -- alternating (page 1, page 2, ...) across server restarts.
+      ALTER TABLE broadcast_state ADD COLUMN scheduled_leaderboard_count INTEGER NOT NULL DEFAULT 0 CHECK (scheduled_leaderboard_count >= 0);
+    `,
+  },
 ];
 
 export function migrate(db, { targetVersion = Infinity } = {}) {

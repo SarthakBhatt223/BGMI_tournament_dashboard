@@ -7,8 +7,8 @@ import { createPlayer, createTeam, listTeams } from '../services/rosterService.j
 import { openDatabase } from './database.js';
 import { migrate } from './migrate.js';
 
-// TODO: CONFIGURE HERE - the real tournament has 18 teams; adjust only for demo purposes.
-const DEMO_TEAM_COUNT = 18;
+// TODO: CONFIGURE HERE - the real tournament has 20 teams; adjust only for demo purposes.
+const DEMO_TEAM_COUNT = 20;
 const DEMO_PLAYERS_PER_TEAM = 4;
 
 export function seedDemoData(db) {

@@ -7,9 +7,10 @@ import { getActiveEvent, getTournamentConfig } from './eventService.js';
 import { computePlayerStats } from './playerStatsService.js';
 import { listPlayers, listTeams } from './rosterService.js';
 import { getMatchDetail, listMatches } from './scoringService.js';
-import { computeStandings, splitIntoPages } from './standingsService.js';
+import { computeStandings, pageIndexForAppearance, splitIntoPages } from './standingsService.js';
 
-export function buildState(db, { mediaDirectory }) {
+// `presentation` / `scheduleStatus` come from the leaderboard scheduler (null when there is none).
+export function buildState(db, { mediaDirectory, getPresentation = () => null, getScheduleStatus = () => null }) {
   const event = getActiveEvent(db);
   const config = getTournamentConfig(db, event.id);
   const broadcast = getBroadcastState(db);
@@ -25,6 +26,7 @@ export function buildState(db, { mediaDirectory }) {
     : playerStats.find((entry) => entry.playerId === broadcast.mvpPlayerId) ?? null;
 
   const ambientVideoFile = config.display.ambientVideoFile;
+  const standingsPages = splitIntoPages(standings, config.display.teamsPerPage);
   return {
     generatedAt: new Date().toISOString(),
     event,
@@ -38,10 +40,27 @@ export function buildState(db, { mediaDirectory }) {
     matches: listMatches(db, event.id),
     currentMatch,
     standings,
-    standingsPages: splitIntoPages(standings, config.display.scrollPageSize),
+    standingsPages,
+    // Everything the compact leaderboard needs, derived from the real team count.
+    leaderboard: {
+      teamCount: standings.length,
+      teamsPerPage: config.display.teamsPerPage,
+      pageCount: standingsPages.length,
+      currentPageIndex: pageIndexForAppearance(broadcast.leaderboardAppearance, standingsPages.length),
+      rotatePagesWhileVisible: config.display.rotatePagesWhileVisible,
+    },
     playerStats,
     topFraggers: playerStats.slice(0, config.display.topFraggersCount),
-    broadcast,
+    broadcast: {
+      ...broadcast,
+      // A scheduled leaderboard currently overlaying the ambient display (null when none). The
+      // display shows it until `endsAt`; compare with `generatedAt` to avoid clock differences.
+      presentation: getPresentation(),
+      schedule: {
+        ...config.scheduledLeaderboard,
+        nextRunAt: getScheduleStatus()?.nextRunAt ?? null,
+      },
+    },
     mvp: mvpStats,
     media: {
       ambientVideoUrl: `/media/${ambientVideoFile}`,

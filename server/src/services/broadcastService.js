@@ -3,7 +3,7 @@
 import { runInTransaction } from '../db/database.js';
 import { badRequest, notFound } from '../errors.js';
 import { recordAudit } from './auditService.js';
-import { optionalText, requireInteger, requireObject, requireOneOf } from '../validation.js';
+import { optionalText, requireBoolean, requireInteger, requireObject, requireOneOf } from '../validation.js';
 
 export const BROADCAST_MODES = ['ambient', 'standings', 'mvp'];
 export const LEADERBOARD_LAYOUTS = ['full', 'scrolling'];
@@ -17,6 +17,7 @@ export function getBroadcastState(db) {
     currentMatchId: row.current_match_id,
     scrollIntervalSeconds: row.scroll_interval_seconds,
     mvpPlayerId: row.mvp_player_id,
+    leaderboardAppearance: row.leaderboard_appearance,
     headlineText: row.headline_text,
     subtitleText: row.subtitle_text,
     updatedAt: row.updated_at,
@@ -47,15 +48,22 @@ export function updateBroadcastState(db, eventId, input) {
     }
   }
 
+  // The leaderboard "appears" when the display switches to it from another mode. Every appearance
+  // moves the compact leaderboard on to the next page. The operator can also advance it by hand.
+  const advanceByHand = body.advanceLeaderboardPage === undefined ? false : requireBoolean(body.advanceLeaderboardPage, 'advanceLeaderboardPage');
+  const newAppearance = mode === 'standings' && current.mode !== 'standings';
+  const leaderboardAppearance = current.leaderboardAppearance + (newAppearance || advanceByHand ? 1 : 0);
+
   runInTransaction(db, () => {
     db.prepare(
       `UPDATE broadcast_state
        SET mode = ?, leaderboard_layout = ?, current_match_id = ?, scroll_interval_seconds = ?,
-           headline_text = ?, subtitle_text = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+           leaderboard_appearance = ?, headline_text = ?, subtitle_text = ?,
+           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
        WHERE id = 1`,
-    ).run(mode, leaderboardLayout, currentMatchId, scrollIntervalSeconds, headlineText, subtitleText);
+    ).run(mode, leaderboardLayout, currentMatchId, scrollIntervalSeconds, leaderboardAppearance, headlineText, subtitleText);
     recordAudit(db, eventId, 'broadcast.update', 'broadcast_state', 1, {
-      mode, leaderboardLayout, currentMatchId, scrollIntervalSeconds,
+      mode, leaderboardLayout, currentMatchId, scrollIntervalSeconds, leaderboardAppearance,
     });
   });
   return getBroadcastState(db);
@@ -87,7 +95,7 @@ export function selectMvp(db, eventId, playerId) {
 
 // Runs a change, then publishes the new state. If the change throws (or its transaction rolls
 // back) nothing is published, so clients never see an uncommitted update.
-export function createStatePublisher({ buildState, emitState, logError = console.error }) {
+export function createStatePublisher({ buildState, emitState, beforePublish = null, logError = console.error }) {
   function publishNow() {
     try {
       emitState(buildState());
@@ -97,8 +105,17 @@ export function createStatePublisher({ buildState, emitState, logError = console
     }
   }
 
+  // `beforePublish` (the leaderboard scheduler) adjusts its timers to the committed change so the
+  // snapshot that follows already reflects it. A failure there must not fail the request.
   function commit(changeWork) {
     const result = changeWork();
+    if (beforePublish) {
+      try {
+        beforePublish();
+      } catch (error) {
+        logError('beforePublish failed:', error);
+      }
+    }
     publishNow();
     return result;
   }

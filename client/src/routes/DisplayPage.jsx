@@ -43,7 +43,13 @@ export default function DisplayPage() {
         <main className="display-panel">
           <DisplayHeader state={state} title="Standings" />
           {state.broadcast.leaderboardLayout === 'scrolling' ? (
-            <ScrollingLeaderboard pages={state.standingsPages} intervalSeconds={state.broadcast.scrollIntervalSeconds} />
+            <ScrollingLeaderboard
+              pages={state.standingsPages}
+              currentPageIndex={state.leaderboard.currentPageIndex}
+              teamsPerPage={state.leaderboard.teamsPerPage}
+              rotateWhileVisible={state.leaderboard.rotatePagesWhileVisible}
+              intervalSeconds={state.broadcast.scrollIntervalSeconds}
+            />
           ) : (
             <FullLeaderboard standings={state.standings} />
           )}

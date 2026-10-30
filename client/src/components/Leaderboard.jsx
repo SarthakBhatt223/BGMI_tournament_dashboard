@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react';
 import EmptyState from './EmptyState.jsx';
 import TeamLogo from './TeamLogo.jsx';
 
-function LeaderboardRows({ rows }) {
+// `slots` reserves room for that many rows, so a short last page keeps the same row height as the
+// full pages instead of stretching its few rows over the whole screen.
+function LeaderboardRows({ rows, slots = rows.length }) {
   return (
-    <div className="leaderboard-grid" style={{ '--row-count': rows.length }}>
+    <div className="leaderboard-grid" style={{ '--row-count': Math.max(slots, rows.length) }}>
       <div className="leaderboard-row leaderboard-head">
         <span className="cell-rank">#</span>
         <span className="cell-team">Team</span>
@@ -35,26 +37,32 @@ export function FullLeaderboard({ standings }) {
   return <LeaderboardRows rows={standings} />;
 }
 
-// Rotates through the pages prepared by the server. Unmounting (a mode change) resets it.
-export function ScrollingLeaderboard({ pages, intervalSeconds }) {
-  const [pageIndex, setPageIndex] = useState(0);
+// Compact leaderboard. The server decides which page belongs to this appearance
+// (`currentPageIndex`), so every display and every reload shows the same page and the next
+// appearance shows the next one. With `rotateWhileVisible` it also flips pages by itself.
+export function ScrollingLeaderboard({ pages, currentPageIndex, teamsPerPage, rotateWhileVisible, intervalSeconds }) {
+  const [offset, setOffset] = useState(0);
+
+  // A new appearance (or a manual "next page") starts again from the page the server chose.
+  useEffect(() => setOffset(0), [currentPageIndex]);
 
   useEffect(() => {
-    if (pages.length <= 1) return undefined;
-    const timer = setInterval(() => setPageIndex((index) => index + 1), intervalSeconds * 1000);
+    if (!rotateWhileVisible || pages.length <= 1) return undefined;
+    const timer = setInterval(() => setOffset((current) => current + 1), intervalSeconds * 1000);
     return () => clearInterval(timer);
-  }, [pages.length, intervalSeconds]);
+  }, [rotateWhileVisible, pages.length, intervalSeconds]);
 
   if (pages.length === 0) return <EmptyState title="No teams registered" />;
-  const visiblePageIndex = pageIndex % pages.length;
+  const visiblePageIndex = (currentPageIndex + offset) % pages.length;
+  const rows = pages[visiblePageIndex];
   return (
     <div className="scrolling-leaderboard">
       <div key={visiblePageIndex} className="page-fade">
-        <LeaderboardRows rows={pages[visiblePageIndex]} />
+        <LeaderboardRows rows={rows} slots={teamsPerPage} />
       </div>
       {pages.length > 1 && (
         <p className="page-indicator">
-          Page {visiblePageIndex + 1} of {pages.length}
+          Ranks {rows[0].rank}-{rows[rows.length - 1].rank} - Page {visiblePageIndex + 1} of {pages.length}
         </p>
       )}
     </div>

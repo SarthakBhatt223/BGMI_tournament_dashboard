@@ -6,7 +6,8 @@ import { optionalMediaPath, optionalText, requireBoolean, requireObject, require
 
 const teamHasHistorySql = `
   (EXISTS (SELECT 1 FROM team_match_results WHERE team_id = teams.id)
-   OR EXISTS (SELECT 1 FROM finish_events WHERE team_id = teams.id)) AS has_history`;
+   OR EXISTS (SELECT 1 FROM finish_events WHERE team_id = teams.id)
+   OR EXISTS (SELECT 1 FROM elimination_events WHERE eliminated_team_id = teams.id OR credited_team_id = teams.id)) AS has_history`;
 
 function toTeamDto(row) {
   return {
@@ -180,8 +181,9 @@ export function deletePlayer(db, playerId) {
   const player = getPlayer(db, playerId);
   const team = getTeam(db, player.teamId);
   const hasFinishes = db.prepare('SELECT 1 FROM finish_events WHERE player_id = ? LIMIT 1').get(playerId);
-  if (hasFinishes) {
-    throw conflict(`Player "${player.name}" has recorded finishes and cannot be deleted. Set the player to inactive instead.`);
+  const hasEliminations = db.prepare('SELECT 1 FROM elimination_events WHERE credited_player_id = ? LIMIT 1').get(playerId);
+  if (hasFinishes || hasEliminations) {
+    throw conflict(`Player "${player.name}" has recorded finishes or eliminations and cannot be deleted. Set the player to inactive instead.`);
   }
   runInTransaction(db, () => {
     db.prepare('UPDATE broadcast_state SET mvp_player_id = NULL WHERE mvp_player_id = ?').run(playerId);

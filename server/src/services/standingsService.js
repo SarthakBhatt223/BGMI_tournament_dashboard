@@ -44,6 +44,7 @@ export function buildStandings({ teams, matches, results, scoring }) {
       matchesPlayed: 0,
       wwcd: 0,
       placementPoints: 0,
+      finishCount: 0,
       finishPoints: 0,
       totalPoints: 0,
       bestPlacement: null,
@@ -58,11 +59,13 @@ export function buildStandings({ teams, matches, results, scoring }) {
         row.matchesPlayed += 1;
         row.placementPoints += result.placement_points;
         row.finishPoints += result.finish_points_snapshot ?? 0;
+        row.finishCount += result.finish_count;
         row.wwcd += result.is_wwcd;
       } else {
         const score = scoreTeamMatch(scoring, { placement, finishCount: result?.finish_count ?? 0 });
         row.placementPoints += score.placementPoints;
         row.finishPoints += score.finishPoints;
+        row.finishCount += result?.finish_count ?? 0;
         row.wwcd += score.isWwcd ? 1 : 0;
       }
       if (placement !== null && (row.bestPlacement === null || placement < row.bestPlacement)) {
@@ -99,15 +102,23 @@ export function computeStandings(db, eventId) {
   return buildStandings({ teams, matches, results, scoring });
 }
 
-// Splits standings into pages for the scrolling leaderboard. Every page is full: when the
-// last page would be short, it starts earlier and repeats a few teams, so no team is omitted
-// and the display never shows a mostly empty page.
+// Splits standings into consecutive pages of at most `pageSize` teams (ranks 1-10, 11-20, ...).
+// The number of pages follows the real team count: 20 teams / 10 per page = 2 pages, 21 = 3 (the
+// last one holds the single remaining team), 0 teams = no pages. Nothing is repeated or skipped.
 export function splitIntoPages(items, pageSize) {
-  if (items.length <= pageSize) return items.length === 0 ? [] : [items];
+  const size = Number.isInteger(pageSize) && pageSize >= 1 ? pageSize : 1;
   const pages = [];
-  for (let start = 0; start + pageSize < items.length; start += pageSize) {
-    pages.push(items.slice(start, start + pageSize));
+  for (let start = 0; start < items.length; start += size) {
+    pages.push(items.slice(start, start + size));
   }
-  pages.push(items.slice(items.length - pageSize));
   return pages;
+}
+
+// Which page the compact leaderboard shows. `appearance` is how many times the leaderboard has
+// been put on the display: the first appearance shows page 1, the next page 2, and so on, wrapping
+// around after the last page. It always stays valid if the team count (page count) changes.
+export function pageIndexForAppearance(appearance, pageCount) {
+  if (pageCount <= 0) return 0;
+  const completedAppearances = Number.isInteger(appearance) && appearance > 0 ? appearance : 1;
+  return (completedAppearances - 1) % pageCount;
 }

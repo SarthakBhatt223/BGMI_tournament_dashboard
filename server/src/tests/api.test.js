@@ -14,6 +14,7 @@ const ADMIN_SECRET = 'test-secret-123';
 
 describe('HTTP API and Socket.IO', () => {
   let server;
+  let scheduler;
   let baseUrl;
   let teamId;
   let playerId;
@@ -31,12 +32,13 @@ describe('HTTP API and Socket.IO', () => {
       mediaDirectory: path.join(os.tmpdir(), 'no-such-media-folder'),
       clientDistDirectory: path.join(os.tmpdir(), 'no-such-client-folder'),
     };
-    ({ server } = createApp({ db, config }));
+    ({ server, scheduler } = createApp({ db, config }));
     await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
     baseUrl = `http://127.0.0.1:${server.address().port}`;
   });
 
   after(() => {
+    scheduler.stop();
     server.closeAllConnections();
     return new Promise((resolve) => server.close(resolve));
   });
@@ -191,6 +193,18 @@ describe('HTTP API and Socket.IO', () => {
     assert.equal(body.media.ambientVideoAvailable, false);
   });
 
+  it('exposes the leaderboard paging data and advances the page by hand', async () => {
+    const { body } = await call('GET', '/state', undefined, { secret: '' });
+    assert.equal(body.leaderboard.teamsPerPage, 10);
+    assert.equal(body.leaderboard.pageCount, Math.ceil(body.leaderboard.teamCount / 10));
+
+    const before = body.broadcast.leaderboardAppearance;
+    const advanced = await call('PUT', '/broadcast', { advanceLeaderboardPage: true });
+    assert.equal(advanced.status, 200);
+    assert.equal(advanced.body.broadcast.leaderboardAppearance, before + 1);
+    assert.equal((await call('PUT', '/broadcast', { advanceLeaderboardPage: 'x' })).status, 400);
+  });
+
   it('exports a backup and refuses to restore without confirmation', async () => {
     const exported = await call('GET', '/backups/export');
     assert.equal(exported.status, 200);
@@ -202,5 +216,186 @@ describe('HTTP API and Socket.IO', () => {
     assert.equal(invalid.status, 422);
     const restored = await call('POST', '/backups/import', { confirm: true, backup: exported.body });
     assert.equal(restored.status, 200);
+  });
+
+  // ---------- elimination events ----------
+
+  const quiet = (ms = 250) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  async function otherTeamId() {
+    const detail = await call('GET', `/matches/${matchId}`);
+    return detail.body.teams.find((team) => team.teamId !== teamId).teamId;
+  }
+
+  it('records an elimination over HTTP and broadcasts it only after the commit', async () => {
+    const otherId = await otherTeamId();
+    const standingsBefore = (await call('GET', '/standings', undefined, { secret: '' })).body.standings;
+    const { socket } = connectClient();
+    const received = [];
+    socket.on('elimination:new', (payload) => received.push(payload));
+    await waitFor(() => socket.connected);
+
+    const created = await call('POST', `/matches/${matchId}/eliminations`, {
+      eliminatedTeamId: otherId, creditedTeamId: teamId, creditedPlayerId: playerId, requestId: 'elim-http-1', metadata: { zone: 'School' },
+    });
+    assert.equal(created.status, 201);
+    assert.equal(created.body.duplicate, false);
+    await waitFor(() => received.length === 1);
+
+    const payload = received[0];
+    assert.equal(payload.id, created.body.elimination.id);
+    assert.equal(payload.eliminatedTeam.id, otherId);
+    assert.equal(payload.eliminatedTeam.name, 'Other API Team');
+    assert.equal(payload.creditedTeam.name, 'API Team');
+    assert.ok('logoPath' in payload.creditedTeam);
+    assert.equal(payload.creditedPlayer.name, 'API Player');
+    assert.equal(payload.matchId, matchId);
+    assert.ok(!Number.isNaN(Date.parse(payload.timestamp)));
+
+    // The event was already committed when it was announced.
+    const history = await call('GET', `/matches/${matchId}/eliminations`, undefined, { secret: '' });
+    assert.equal(history.status, 200);
+    assert.deepEqual(history.body.eliminations.map((entry) => entry.id), [payload.id]);
+
+    // No scoring change at all.
+    const standingsAfter = (await call('GET', '/standings', undefined, { secret: '' })).body.standings;
+    assert.deepEqual(standingsAfter, standingsBefore);
+    socket.close();
+  });
+
+  it('a retried elimination request creates and broadcasts nothing more', async () => {
+    const otherId = await otherTeamId();
+    const { socket } = connectClient();
+    const received = [];
+    socket.on('elimination:new', (payload) => received.push(payload));
+    await waitFor(() => socket.connected);
+
+    const retry = await call('POST', `/matches/${matchId}/eliminations`, {
+      eliminatedTeamId: otherId, creditedTeamId: teamId, creditedPlayerId: playerId, requestId: 'elim-http-1',
+    });
+    assert.equal(retry.status, 200);
+    assert.equal(retry.body.duplicate, true);
+    await quiet();
+    assert.equal(received.length, 0);
+    const history = await call('GET', `/matches/${matchId}/eliminations`, undefined, { secret: '' });
+    assert.equal(history.body.eliminations.length, 1);
+    socket.close();
+  });
+
+  it('rejects invalid elimination requests with clear errors and broadcasts nothing', async () => {
+    const otherId = await otherTeamId();
+    const { socket } = connectClient();
+    const received = [];
+    socket.on('elimination:new', (payload) => received.push(payload));
+    await waitFor(() => socket.connected);
+    const post = (body, route = `/matches/${matchId}/eliminations`) => call('POST', route, body);
+
+    assert.equal((await post({ eliminatedTeamId: teamId, creditedTeamId: teamId, requestId: 'e1' })).status, 400);
+    assert.equal((await post({ eliminatedTeamId: 999999, creditedTeamId: teamId, requestId: 'e2' })).status, 400);
+    assert.equal((await post({ eliminatedTeamId: 'team_a', creditedTeamId: teamId, requestId: 'e3' })).status, 400);
+    assert.equal((await post({ eliminatedTeamId: otherId, creditedTeamId: teamId })).status, 400);
+    assert.equal((await post({ eliminatedTeamId: otherId, creditedTeamId: teamId, creditedPlayerId: 999999, requestId: 'e4' })).status, 400);
+    assert.equal((await post({ eliminatedTeamId: otherId, creditedTeamId: teamId, requestId: 'e5' }, '/matches/999999/eliminations')).status, 404);
+    const again = await post({ eliminatedTeamId: otherId, creditedTeamId: teamId, requestId: 'e6' }); // already eliminated
+    assert.equal(again.status, 409);
+    assert.equal((await post({ eliminatedTeamId: otherId, creditedTeamId: teamId, requestId: 'elim-http-1' })).status, 409); // same id, different request
+    const unauthenticated = await call('POST', `/matches/${matchId}/eliminations`, { eliminatedTeamId: otherId, creditedTeamId: teamId, requestId: 'e7' }, { secret: '' });
+    assert.equal(unauthenticated.status, 401);
+
+    const planned = await call('POST', '/matches', {});
+    const notStarted = await post({ eliminatedTeamId: otherId, creditedTeamId: teamId, requestId: 'e8' }, `/matches/${planned.body.match.id}/eliminations`);
+    assert.equal(notStarted.status, 409);
+    assert.match(notStarted.body.error.message, /not started/);
+
+    await quiet();
+    assert.equal(received.length, 0);
+    socket.close();
+  });
+
+  it('voiding keeps the history', async () => {
+    const history = await call('GET', `/matches/${matchId}/eliminations`, undefined, { secret: '' });
+    const [first] = history.body.eliminations;
+    const voided = await call('POST', `/matches/${matchId}/eliminations/${first.id}/void`, { reason: 'test' });
+    assert.equal(voided.status, 200);
+    assert.equal(voided.body.elimination.status, 'voided');
+    const after = await call('GET', `/matches/${matchId}/eliminations`, undefined, { secret: '' });
+    assert.deepEqual(after.body.eliminations.map((entry) => entry.status), ['voided']);
+  });
+
+  // ---------- scheduled leaderboard over a real socket ----------
+
+  it('broadcasts a scheduled leaderboard, lets reconnecting displays recover it, and returns to ambient', async () => {
+    const config = (await call('GET', '/event/config')).body.config;
+    const changed = await call('PUT', '/event/config', {
+      ...config, scheduledLeaderboard: { ...config.scheduledLeaderboard, leaderboardIntervalMs: 60000, leaderboardDisplayDurationMs: 1200 },
+    });
+    assert.equal(changed.status, 200);
+    assert.equal((await call('PUT', '/broadcast', { mode: 'ambient' })).status, 200);
+    scheduler.start();
+    scheduler.start(); // idempotent
+    assert.equal(scheduler.getStatus().intervalTimerArmed, true);
+
+    const display = connectClient();
+    const leaderboardEvents = [];
+    const stateEvents = [];
+    display.socket.on('broadcast:leaderboard', (payload) => leaderboardEvents.push(payload));
+    display.socket.on('broadcast:state', (payload) => stateEvents.push(payload));
+    await waitFor(() => display.updates.length >= 1);
+    assert.equal(display.updates[0].broadcast.presentation, null);
+
+    assert.ok(scheduler.triggerNow());
+    await waitFor(() => leaderboardEvents.length === 1);
+    const shown = leaderboardEvents[0];
+    assert.equal(shown.type, 'scheduled_leaderboard');
+    assert.equal(shown.page, 1);
+    assert.equal(shown.totalPages, 1); // two teams in this test database
+    assert.equal(shown.standings.length, 2);
+    assert.equal(shown.displayDurationMs, 1200);
+    assert.equal(stateEvents.at(-1).phase, 'leaderboard_started');
+    await waitFor(() => display.updates.at(-1).broadcast.presentation !== null);
+
+    // Displays that disconnect and reconnect mid-presentation recover it from the snapshot,
+    // and reconnecting does not create more schedules.
+    for (let reconnect = 0; reconnect < 5; reconnect += 1) {
+      const again = connectClient();
+      await waitFor(() => again.updates.length >= 1);
+      assert.equal(again.updates[0].broadcast.presentation.presentationId, shown.presentationId);
+      assert.equal(again.updates[0].broadcast.mode, 'ambient');
+      again.socket.close();
+    }
+    assert.equal(scheduler.getStatus().intervalTimerArmed, true);
+
+    await waitFor(() => stateEvents.some((entry) => entry.phase === 'returned_to_ambient'), 4000);
+    await waitFor(() => display.updates.at(-1).broadcast.presentation === null);
+    const state = await call('GET', '/state', undefined, { secret: '' });
+    assert.equal(state.body.broadcast.mode, 'ambient');
+    assert.equal(state.body.broadcast.presentation, null);
+    display.socket.close();
+  });
+
+  it('a manual mode change cancels a scheduled leaderboard immediately and the schedule pauses', async () => {
+    const display = connectClient();
+    const stateEvents = [];
+    display.socket.on('broadcast:state', (payload) => stateEvents.push(payload));
+    await waitFor(() => display.updates.length >= 1);
+
+    assert.ok(scheduler.triggerNow());
+    await waitFor(() => display.updates.at(-1).broadcast.presentation !== null);
+
+    const switched = await call('PUT', '/broadcast', { mode: 'mvp' });
+    assert.equal(switched.status, 200);
+    await waitFor(() => stateEvents.some((entry) => entry.phase === 'cancelled'));
+    await waitFor(() => display.updates.at(-1).broadcast.presentation === null);
+    assert.equal(display.updates.at(-1).broadcast.mode, 'mvp');
+    assert.equal(scheduler.getStatus().intervalTimerArmed, false);
+    assert.equal(scheduler.triggerNow(), null); // not allowed while the MVP is on screen
+
+    await quiet(1500); // the old end timer must not fire
+    assert.equal(stateEvents.some((entry) => entry.phase === 'returned_to_ambient'), false);
+    assert.equal(display.updates.at(-1).broadcast.mode, 'mvp');
+
+    assert.equal((await call('PUT', '/broadcast', { mode: 'ambient' })).status, 200);
+    assert.equal(scheduler.getStatus().intervalTimerArmed, true);
+    display.socket.close();
   });
 });

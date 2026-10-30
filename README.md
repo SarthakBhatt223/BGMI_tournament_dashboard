@@ -1,6 +1,6 @@
 # BGMI Tournament Management (local-first)
 
-A web app for running a college BGMI tournament with 18 teams. It runs entirely on your own
+A web app for running a college BGMI tournament with up to a few dozen teams (built for 20). It runs entirely on your own
 computer; no internet, cloud service or account is needed.
 
 - `/admin` - private control panel: teams, players, match scoring, broadcast controls, backups.
@@ -124,7 +124,7 @@ To use another file name, change `display.ambientVideoFile` in Settings. See
 - **Restore from backup file** validates the file on the server first (format, version, types,
   references, duplicate keys, configuration). An invalid file changes nothing. A valid file
   **replaces everything** after you confirm, inside one database transaction.
-- Backup format version 2 stores team finish totals. Version 1 files (made before the Player
+- Backup format version 3 adds elimination events and the scheduled-leaderboard counter (older files without them still restore). Version 2 stores team finish totals. Version 1 files (made before the Player
   Finish Audit existed) are still accepted: team totals are rebuilt from the finish ledger,
   so standings are unchanged.
 - Make an export before the event, after each match, and keep a copy on another device.
@@ -137,7 +137,7 @@ Search the code for `TODO: CONFIGURE HERE`. The main items:
 | --- | --- |
 | Placement-point table (**placeholder**, not the official one), finish points, WWCD placement, tie-breakers, duplicate-placement rule, whether player finishes must reconcile before finalizing (`requirePlayerReconciliationToFinalize`) | `server/src/services/defaultTournamentConfig.js`, or Admin > Settings after the first start |
 | Event name, club name | Admin > Settings (default in `server/src/db/migrate.js`) |
-| Ambient video path/name, scroll page size and default interval | Settings (`display.*`) and `public/media/` |
+| Ambient video path/name, `teamsPerPage` (default 10), `rotatePagesWhileVisible`, default page-flip interval | Settings (`display.*`) and `public/media/` |
 | Players per team (warning only), tagline | Settings (`roster`, `branding`) |
 | Browser tab title | `client/index.html` |
 | Colours and sizes (final black/orange/green identity) | `client/src/styles/variables.css` |
@@ -197,6 +197,68 @@ upgrading a database that holds real data.**
 4. Finalize in the Scoring tab. A finalized match is locked for both tabs; use **Reopen** (reason
    required) to correct it. Player finishes are admin-only and are not part of `/display`.
 
+## Leaderboard pages
+
+- **Full** layout lists every registered (active) team on one screen.
+- **Compact** layout shows `display.teamsPerPage` teams per page (default 10): with 20 teams page 1
+  is ranks 1-10 and page 2 is ranks 11-20. The number of pages is calculated from the real team
+  count (21 teams = 3 pages, the last with one team; 8 teams = 1 page). Pages are consecutive and
+  never repeat a team.
+- **One page per appearance.** Each time the display switches *to* the leaderboard from another
+  mode (ambient, MVP) the compact leaderboard shows the next page, wrapping around after the last
+  one. The first appearance shows page 1. The server keeps this counter (`leaderboard_appearance`),
+  so every display and every browser reload shows the same page. Changing the layout or the
+  headline while the leaderboard is already visible is not a new appearance. Admin >
+  Broadcast has **Next leaderboard page** to move on by hand.
+- Set `display.rotatePagesWhileVisible` to `true` in Settings if you also want the pages to flip by
+  themselves while visible (every *Page flip interval* seconds, starting from the page chosen for
+  this appearance). The default is `false`.
+- The setting `scrollPageSize` from earlier versions is no longer used.
+
+## Elimination events
+
+"Team A was eliminated by Team B" (optionally credited to one player of Team B). They are a
+**broadcast and audit record only**: they never change team finishes, player finishes, kills or
+points. If the operator also records the finish, that is a separate action and is counted once, in
+the normal scoring.
+
+- Allowed only while the match is **in progress**. Both teams must be active teams of the event
+  and differ; a player must be an active player of the *credited* team. A team can be eliminated
+  once per match (void the earlier event to record it again).
+- `requestId` makes retries safe: the same id returns the first event (`duplicate: true`) and
+  nothing is created or broadcast again; the same id for a different event is a 409.
+- Events are never deleted. Voiding marks `status: "voided"`; the history keeps both. Teams and
+  players that appear in an event cannot be deleted (deactivate them).
+- After the database commit the server emits `elimination:new` (below). Error codes: 400
+  malformed/unknown team or player, 404 unknown match, 409 match not in progress / already
+  eliminated / `requestId` reused.
+
+## Scheduled leaderboard (ambient mode)
+
+While the display is in **ambient** mode the server shows the leaderboard every
+`scheduledLeaderboard.leaderboardIntervalMs` (default 300000 = 5 min) for
+`leaderboardDisplayDurationMs` (default 15000), `teamsPerPage` teams at a time (default 9; 18
+teams = ranks 1-9, then 10-18), alternating pages on successive appearances. Settings are in
+Admin > Settings (`scheduledLeaderboard`: `enabled`, `leaderboardIntervalMs`,
+`leaderboardDisplayDurationMs`, `teamsPerPage`). The display duration must be shorter than the
+interval. This is separate from `display.teamsPerPage`, which belongs to the manual compact layout.
+
+- It is a **temporary overlay**: the saved broadcast mode stays `ambient`. The state snapshot has
+  `broadcast.presentation` (null or the presentation below) and `broadcast.schedule`
+  (settings and `nextRunAt`). A display that refreshes or reconnects reads `presentation` from the
+  snapshot and shows it until `endsAt` (compare with `generatedAt`, not the browser clock).
+- One scheduler runs in the server (started once in `index.js`); sockets never start timers, so
+  reconnecting clients cannot duplicate it. At most an interval timer and a presentation timer
+  exist, and both are cleared on shutdown.
+- **The operator wins.** Selecting any mode (full leaderboard, MVP, or ambient again) cancels a
+  running presentation immediately (`broadcast:state` phase `cancelled`). While the mode is not
+  ambient nothing is scheduled; returning to ambient starts a fresh countdown. A backup restore
+  also cancels it.
+- It runs while the event status is not `completed` (setup and live both count).
+- Standings are read from the normal scoring code at each appearance (latest data, official
+  tie-breakers). After a restart the countdown starts fresh: appearances missed while the server
+  was down are never replayed, and the page alternation continues (counter is saved).
+
 ## Real-time protocol
 
 Socket.IO, same origin as the page. The server emits `state:update` with the full state
@@ -205,6 +267,15 @@ when a client connects or reconnects. A client can also emit `state:request` wit
 acknowledgement callback to receive the snapshot. The server publishes only after the database
 transaction succeeded; a failed request publishes nothing. The browser sockets are read-only:
 all changes go through the REST API, which is protected by the admin secret.
+
+Events (server to clients), names in `server/src/socketEvents.js`:
+
+| Event | When | Payload |
+| --- | --- | --- |
+| `state:update` | connect, `state:request`, after every change and when a presentation starts or ends | full snapshot |
+| `elimination:new` | after an elimination event is committed | `{ id, matchId, matchNumber, status, eliminatedTeamId, creditedTeamId, creditedPlayerId, eliminatedTeam: {id,name,shortName,logoPath}, creditedTeam: {...}, creditedPlayer: {id,name,inGameName} or null, recordedBy, metadata, createdAt, timestamp }` |
+| `broadcast:leaderboard` | a scheduled leaderboard starts | `{ type: "scheduled_leaderboard", reason: "scheduled_interval", presentationId, page, totalPages, teamsPerPage, displayDurationMs, returnToMode: "ambient", standings: [{ rank, teamId, name, shortName, logoPath, wwcd, finishCount, finishPoints, placementPoints, totalPoints }], startedAt, endsAt, timestamp }` |
+| `broadcast:state` | presentation lifecycle | `{ phase: "leaderboard_started" or "returned_to_ambient" or "cancelled", reason, presentationId, mode, presentation, timestamp }` (`cancelled` reasons: `manual_mode_change`, `disabled`, `mode_changed`, `backup_restored`) |
 
 ## API reference
 
@@ -231,8 +302,11 @@ Reads are public; all other methods and `GET /backups/*`, `GET /audit-log`,
 | `GET /matches/:id/player-audit` | Per-team reconciliation and player finishes (admin secret) |
 | `POST /matches/:id/players/:playerId/finishes` | Player finish `{ delta, requestId, teamId? }`; returns the refreshed audit |
 | `GET /matches/:id/finish-events` | Player finish ledger including undone rows (admin secret) |
-| `GET /standings`; `GET /player-stats?search=` | Standings with scroll pages; player statistics |
-| `GET, PUT /broadcast` | Mode (`ambient`, `standings`, `mvp`), layout, interval, text, current match |
+| `GET /matches/:id/eliminations` | Elimination history of a match (oldest first, voided events included) |
+| `POST /matches/:id/eliminations` | Record `{ eliminatedTeamId, creditedTeamId, creditedPlayerId?, requestId, metadata? }` (integer ids); 201 new, 200 repeat of a `requestId`; optional header `x-operator` |
+| `POST /matches/:id/eliminations/:eventId/void` | Void a mistaken event `{ reason? }` (kept in the history) |
+| `GET /standings`; `GET /player-stats?search=` | Standings and their pages (`display.teamsPerPage` per page); player statistics |
+| `GET, PUT /broadcast` | Mode (`ambient`, `standings`, `mvp`), layout, interval, text, current match, `advanceLeaderboardPage: true` |
 | `GET, PUT /mvp` | `{ "playerId": id or null }` |
 | `GET /backups/export`; `POST /backups/import` | Backup; restore `{ "confirm": true, "backup": {...} }` |
 
@@ -252,7 +326,7 @@ client/src/   routes/ components/ hooks/ services/ (api.js, socket.js) styles/ u
 
 1. `npm run build && npm start`, open `/admin` and `/display` on the real hardware.
 2. Add a test match, record finishes and placements, check the display updates within a second.
-3. Switch every display mode; check the scrolling interval and that all 18 teams are visible.
+3. Switch every display mode; check that the compact leaderboard alternates pages on each appearance and that the full layout shows every team.
 4. Pull the network cable or Wi-Fi on the display computer: the "Connection lost" badge must
    appear and the data must refresh by itself when the network returns.
 5. Restart the server: data must still be there.

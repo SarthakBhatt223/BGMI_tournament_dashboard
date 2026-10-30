@@ -33,7 +33,14 @@ export function getTournamentConfig(db, eventId) {
   if (!row) throw notFound('Event configuration is missing');
   // Saved configurations from older versions may lack newer keys; fill those from the defaults.
   const saved = JSON.parse(row.config_json);
-  return { ...saved, scoring: { ...defaultTournamentConfig.scoring, ...saved.scoring } };
+  const display = { ...defaultTournamentConfig.display, ...saved.display };
+  delete display.scrollPageSize; // replaced by teamsPerPage
+  return {
+    ...saved,
+    scoring: { ...defaultTournamentConfig.scoring, ...saved.scoring },
+    scheduledLeaderboard: { ...defaultTournamentConfig.scheduledLeaderboard, ...saved.scheduledLeaderboard },
+    display,
+  };
 }
 
 export function updateTournamentConfig(db, eventId, input) {
@@ -77,13 +84,37 @@ export function validateTournamentConfig(input) {
     branding: {
       tagline: optionalText(branding.tagline, 'tagline', { max: 120 }) ?? '',
     },
+    scheduledLeaderboard: validateScheduledLeaderboard(body.scheduledLeaderboard),
     display: {
       ambientVideoFile: validateMediaFileName(display.ambientVideoFile),
-      scrollPageSize: requireInteger(display.scrollPageSize, 'scrollPageSize', { min: 1, max: 30 }),
+      // teamsPerPage / rotatePagesWhileVisible were added later (older configs had scrollPageSize,
+      // which is ignored): fall back to the defaults when they are missing.
+      teamsPerPage: requireInteger(display.teamsPerPage ?? defaultTournamentConfig.display.teamsPerPage, 'teamsPerPage', { min: 1, max: 50 }),
+      rotatePagesWhileVisible: requireBoolean(
+        display.rotatePagesWhileVisible ?? defaultTournamentConfig.display.rotatePagesWhileVisible,
+        'rotatePagesWhileVisible',
+      ),
       defaultScrollIntervalSeconds: requireInteger(display.defaultScrollIntervalSeconds, 'defaultScrollIntervalSeconds', { min: 3, max: 120 }),
       topFraggersCount: requireInteger(display.topFraggersCount, 'topFraggersCount', { min: 1, max: 20 }),
     },
   };
+}
+
+// Added later: configurations and backups from older versions have no such block, so a missing
+// block (or key) falls back to the defaults.
+function validateScheduledLeaderboard(input) {
+  const defaults = defaultTournamentConfig.scheduledLeaderboard;
+  const source = input === undefined ? {} : requireObject(input, 'config.scheduledLeaderboard');
+  const settings = {
+    enabled: requireBoolean(source.enabled ?? defaults.enabled, 'scheduledLeaderboard.enabled'),
+    leaderboardIntervalMs: requireInteger(source.leaderboardIntervalMs ?? defaults.leaderboardIntervalMs, 'leaderboardIntervalMs', { min: 5000, max: 86400000 }),
+    leaderboardDisplayDurationMs: requireInteger(source.leaderboardDisplayDurationMs ?? defaults.leaderboardDisplayDurationMs, 'leaderboardDisplayDurationMs', { min: 1000, max: 600000 }),
+    teamsPerPage: requireInteger(source.teamsPerPage ?? defaults.teamsPerPage, 'scheduledLeaderboard.teamsPerPage', { min: 1, max: 50 }),
+  };
+  if (settings.leaderboardDisplayDurationMs >= settings.leaderboardIntervalMs) {
+    throw badRequest('leaderboardDisplayDurationMs must be shorter than leaderboardIntervalMs');
+  }
+  return settings;
 }
 
 function validatePlacementPointsTable(table) {

@@ -7,7 +7,9 @@ import express from 'express';
 import { Server as SocketServer } from 'socket.io';
 import { AppError, unauthorized } from './errors.js';
 import { createStatePublisher } from './services/broadcastService.js';
+import { createLeaderboardScheduler } from './services/leaderboardScheduler.js';
 import { buildState } from './services/stateService.js';
+import { SOCKET_EVENTS } from './socketEvents.js';
 import { createBackupsRouter } from './routes/backups.js';
 import { createBroadcastRouter } from './routes/broadcast.js';
 import { createEventRouter } from './routes/event.js';
@@ -18,10 +20,8 @@ import { createStandingsRouter } from './routes/standings.js';
 import { createSystemRouter } from './routes/system.js';
 import { createTeamsRouter } from './routes/teams.js';
 
-// Socket.IO event names (server -> client unless noted):
-//   state:update   payload: full state snapshot from buildState()
-//   state:request  (client -> server) optional ack callback receives the snapshot
-export const SOCKET_EVENTS = { stateUpdate: 'state:update', stateRequest: 'state:request' };
+// Socket.IO event names live in socketEvents.js (documented in the README).
+export { SOCKET_EVENTS };
 
 // Reads are public so /display works without a secret. Everything that changes data, and the
 // private read-only endpoints below, require the admin secret when one is configured.
@@ -67,12 +67,30 @@ export function createApp({ db, config }) {
   const server = http.createServer(app);
   const io = new SocketServer(server);
 
-  const getState = () => buildState(db, { mediaDirectory: config.mediaDirectory });
+  // Emits to every connected client; a failing socket must never fail an already committed change.
+  const emit = (eventName, payload) => {
+    try {
+      io.emit(eventName, payload);
+    } catch (error) {
+      console.error(`Failed to emit ${eventName}:`, error);
+    }
+  };
+
+  // The scheduler and the publisher need each other: the publisher tells the scheduler to adjust
+  // to every committed change, the scheduler asks the publisher to push its presentations.
+  let scheduler = null;
+  const getState = () => buildState(db, {
+    mediaDirectory: config.mediaDirectory,
+    getPresentation: () => scheduler?.getPresentation() ?? null,
+    getScheduleStatus: () => scheduler?.getStatus() ?? null,
+  });
   const publisher = createStatePublisher({
     buildState: getState,
     emitState: (state) => io.emit(SOCKET_EVENTS.stateUpdate, state),
+    beforePublish: () => scheduler?.evaluate(),
   });
-  const context = { db, config, commit: publisher.commit, getState };
+  scheduler = createLeaderboardScheduler({ db, publish: publisher.publishNow, emit });
+  const context = { db, config, commit: publisher.commit, getState, emit, scheduler };
 
   // New and reconnecting clients always receive the current state immediately.
   io.on('connection', (socket) => {
@@ -112,5 +130,6 @@ export function createApp({ db, config }) {
   }
 
   app.use(handleErrors);
-  return { app, server, io, publisher };
+  // The scheduler is started by the caller (index.js), so tests can create the app without timers.
+  return { app, server, io, publisher, scheduler };
 }

@@ -1,5 +1,7 @@
 import express from 'express';
 import { getActiveEvent } from '../services/eventService.js';
+import { listEliminations, recordElimination, voidElimination } from '../services/eliminationService.js';
+import { SOCKET_EVENTS } from '../socketEvents.js';
 import { adjustPlayerFinishes, getPlayerAudit } from '../services/playerAuditService.js';
 import {
   adjustTeamFinishes,
@@ -15,7 +17,7 @@ import {
 } from '../services/scoringService.js';
 import { parseId } from '../validation.js';
 
-export function createMatchesRouter({ db, commit }) {
+export function createMatchesRouter({ db, commit, emit }) {
   const router = express.Router();
 
   router.get('/', (req, res) => {
@@ -73,6 +75,30 @@ export function createMatchesRouter({ db, commit }) {
     const matchId = parseId(req.params.id);
     const result = commit(() => adjustPlayerFinishes(db, matchId, parseId(req.params.playerId, 'playerId'), req.body));
     res.json({ ...result, audit: getPlayerAudit(db, matchId) });
+  });
+
+  // ---------- elimination events ("Team A was eliminated by Team B") ----------
+  // Broadcast/audit records only: they never change finishes, kills or points.
+
+  router.get('/:id/eliminations', (req, res) => {
+    res.json({ eliminations: listEliminations(db, parseId(req.params.id)) });
+  });
+
+  // Body: { eliminatedTeamId, creditedTeamId, creditedPlayerId?, requestId, metadata? }
+  // 201 for a new event, 200 when the same requestId was already processed (nothing is created
+  // or broadcast again). Optional header x-operator names the operator.
+  router.post('/:id/eliminations', (req, res) => {
+    const result = commit(() => recordElimination(db, parseId(req.params.id), req.body, { operator: req.get('x-operator') }));
+    if (!result.duplicate) {
+      // Emitted only after the transaction has committed.
+      emit(SOCKET_EVENTS.eliminationNew, { ...result.elimination, timestamp: new Date().toISOString() });
+    }
+    res.status(result.duplicate ? 200 : 201).json(result);
+  });
+
+  // Marks a mistaken event as voided (it stays in the history). Body: { reason? }
+  router.post('/:id/eliminations/:eliminationId/void', (req, res) => {
+    res.json(commit(() => voidElimination(db, parseId(req.params.id), parseId(req.params.eliminationId, 'eliminationId'), req.body ?? {})));
   });
 
   return router;

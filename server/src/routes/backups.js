@@ -2,7 +2,7 @@ import express from 'express';
 import { badRequest } from '../errors.js';
 import { exportBackup, restoreBackup } from '../services/backupService.js';
 
-export function createBackupsRouter({ db, commit }) {
+export function createBackupsRouter({ db, commit, scheduler }) {
   const router = express.Router();
 
   router.get('/export', (req, res) => {
@@ -17,7 +17,11 @@ export function createBackupsRouter({ db, commit }) {
     if (req.body?.confirm !== true) {
       throw badRequest('Restoring replaces all tournament data. Send "confirm": true to proceed.');
     }
-    res.json(commit(() => restoreBackup(db, req.body.backup)));
+    res.json(commit(() => {
+      const result = restoreBackup(db, req.body.backup);
+      scheduler?.cancelPresentation('backup_restored');
+      return result;
+    }));
   });
 
   return router;

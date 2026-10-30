@@ -8,10 +8,11 @@ import { recordAudit } from './auditService.js';
 import { validateTournamentConfig } from './eventService.js';
 
 export const BACKUP_FORMAT = 'bgmi-tournament-backup';
-// Version 2 stores team finish totals in team_match_results. Version 1 backups (team totals
+// Version 3 adds elimination events and the scheduled-leaderboard counter (both optional when
+// reading older files). Version 2 stores team finish totals in team_match_results. Version 1 backups (team totals
 // were derived from finish_events) are still accepted and converted while restoring.
-export const BACKUP_VERSION = 2;
-const READABLE_VERSIONS = [1, 2];
+export const BACKUP_VERSION = 3;
+const READABLE_VERSIONS = [1, 2, 3];
 
 // Column types: int, text, intOrNull, textOrNull, intDefault0 (missing in older backups).
 // Tables are listed in insert order (parents before children); deletion runs in reverse.
@@ -23,7 +24,8 @@ const BACKUP_TABLES = [
   { name: 'matches', columns: { id: 'int', event_id: 'int', match_number: 'int', label: 'textOrNull', status: 'text', created_at: 'text', finalized_at: 'textOrNull' } },
   { name: 'team_match_results', columns: { id: 'int', match_id: 'int', team_id: 'int', placement: 'intOrNull', placement_points: 'int', is_wwcd: 'int', finish_points_snapshot: 'intOrNull', finish_count: 'intDefault0', finish_entered: 'intDefault0' } },
   { name: 'finish_events', columns: { id: 'int', event_id: 'int', match_id: 'int', team_id: 'int', player_id: 'intOrNull', action_type: 'text', idempotency_key: 'textOrNull', created_at: 'text', reversed_at: 'textOrNull' } },
-  { name: 'broadcast_state', columns: { id: 'int', event_id: 'int', mode: 'text', leaderboard_layout: 'text', current_match_id: 'intOrNull', scroll_interval_seconds: 'int', mvp_player_id: 'intOrNull', headline_text: 'textOrNull', subtitle_text: 'textOrNull', updated_at: 'text' } },
+  { name: 'elimination_events', optional: true, columns: { id: 'int', match_id: 'int', eliminated_team_id: 'int', credited_team_id: 'int', credited_player_id: 'intOrNull', status: 'text', recorded_by: 'textOrNull', metadata_json: 'text', void_reason: 'textOrNull', voided_at: 'textOrNull', created_at: 'text' } },
+  { name: 'broadcast_state', columns: { id: 'int', event_id: 'int', mode: 'text', leaderboard_layout: 'text', current_match_id: 'intOrNull', scroll_interval_seconds: 'int', mvp_player_id: 'intOrNull', leaderboard_appearance: 'intDefault0', scheduled_leaderboard_count: 'intDefault0', headline_text: 'textOrNull', subtitle_text: 'textOrNull', updated_at: 'text' } },
   { name: 'audit_log', columns: { id: 'int', event_id: 'intOrNull', action: 'text', entity_type: 'text', entity_id: 'intOrNull', details_json: 'text', created_at: 'text' } },
 ];
 
@@ -33,6 +35,7 @@ const ALLOWED_VALUES = {
   'broadcast_state.mode': ['ambient', 'standings', 'mvp'],
   'broadcast_state.leaderboard_layout': ['full', 'scrolling'],
   'finish_events.action_type': ['finish'],
+  'elimination_events.status': ['active', 'voided'],
   'teams.active': [0, 1],
   'players.active': [0, 1],
   'team_match_results.is_wwcd': [0, 1],
@@ -49,6 +52,12 @@ export function exportBackup(db) {
       .map((row) => ({ ...row }));
   }
   return { format: BACKUP_FORMAT, version: BACKUP_VERSION, exportedAt: new Date().toISOString(), tables };
+}
+
+// Older backups have no elimination_events table: treat it as empty.
+function rowsOf(backup, table) {
+  const rows = backup.tables[table.name];
+  return rows === undefined && table.optional ? [] : rows;
 }
 
 function firstColumn(table) {
@@ -84,7 +93,7 @@ export function validateBackup(backup) {
 
   const idsByTable = {};
   for (const table of BACKUP_TABLES) {
-    const rows = backup.tables[table.name];
+    const rows = rowsOf(backup, table);
     if (!Array.isArray(rows)) {
       report(`Table "${table.name}" is missing or not a list.`);
       continue;
@@ -96,7 +105,7 @@ export function validateBackup(backup) {
       for (const [column, type] of Object.entries(table.columns)) {
         const value = row[column] === undefined ? defaultFor(type) : row[column];
         if (!isValidValue(value, type)) report(`${label}.${column} has an invalid value.`);
-        if (column === 'finish_count' && value < 0) report(`${label}.${column} must not be negative.`);
+        if ((column === 'finish_count' || column === 'leaderboard_appearance' || column === 'scheduled_leaderboard_count') && value < 0) report(`${label}.${column} must not be negative.`);
         const allowed = ALLOWED_VALUES[`${table.name}.${column}`];
         if (allowed && !allowed.includes(value)) report(`${label}.${column} must be one of: ${allowed.join(', ')}.`);
       }
@@ -109,7 +118,7 @@ export function validateBackup(backup) {
   }
   if (problems.length > 0) return problems;
 
-  const { tables } = backup;
+  const tables = { ...backup.tables, elimination_events: rowsOf(backup, BACKUP_TABLES.find((t) => t.name === 'elimination_events')) };
   const checkReference = (tableName, column, targetTable, { nullable = false } = {}) => {
     tables[tableName].forEach((row, index) => {
       if (row[column] == null) {
@@ -129,6 +138,10 @@ export function validateBackup(backup) {
   checkReference('finish_events', 'match_id', 'matches');
   checkReference('finish_events', 'team_id', 'teams');
   checkReference('finish_events', 'player_id', 'players', { nullable: true });
+  checkReference('elimination_events', 'match_id', 'matches');
+  checkReference('elimination_events', 'eliminated_team_id', 'teams');
+  checkReference('elimination_events', 'credited_team_id', 'teams');
+  checkReference('elimination_events', 'credited_player_id', 'players', { nullable: true });
   checkReference('broadcast_state', 'event_id', 'events');
   checkReference('broadcast_state', 'current_match_id', 'matches', { nullable: true });
   checkReference('broadcast_state', 'mvp_player_id', 'players', { nullable: true });
@@ -143,6 +156,7 @@ export function validateBackup(backup) {
   reportDuplicates(tables.teams, ['event_id', 'name'], 'teams', report);
   reportDuplicates(tables.matches, ['event_id', 'match_number'], 'matches', report);
   reportDuplicates(tables.team_match_results, ['match_id', 'team_id'], 'team_match_results', report);
+  reportDuplicates(tables.elimination_events.filter((row) => row.status === 'active'), ['match_id', 'eliminated_team_id'], 'active elimination_events', report);
   reportDuplicates(tables.finish_events.filter((row) => row.idempotency_key != null), ['idempotency_key'], 'finish_events', report);
 
   if (tables.event_config.length === 1) {
@@ -180,7 +194,7 @@ export function restoreBackup(db, backup) {
       const insert = db.prepare(
         `INSERT INTO ${table.name} (${columnNames.join(', ')}) VALUES (${columnNames.map(() => '?').join(', ')})`,
       );
-      for (const row of backup.tables[table.name]) {
+      for (const row of rowsOf(backup, table)) {
         insert.run(...columnNames.map((column) => row[column] ?? defaultFor(table.columns[column]) ?? null));
       }
     }
@@ -188,8 +202,8 @@ export function restoreBackup(db, backup) {
     const eventId = backup.tables.events[0].id;
     recordAudit(db, eventId, 'backup.restore', 'backup', null, {
       exportedAt: backup.exportedAt ?? null,
-      counts: Object.fromEntries(BACKUP_TABLES.map((table) => [table.name, backup.tables[table.name].length])),
+      counts: Object.fromEntries(BACKUP_TABLES.map((table) => [table.name, rowsOf(backup, table).length])),
     });
-    return { restored: Object.fromEntries(BACKUP_TABLES.map((table) => [table.name, backup.tables[table.name].length])) };
+    return { restored: Object.fromEntries(BACKUP_TABLES.map((table) => [table.name, rowsOf(backup, table).length])) };
   });
 }

@@ -33,6 +33,11 @@ export function changeScoring(db, eventId, scoringChanges) {
   return updateTournamentConfig(db, eventId, { ...config, scoring: { ...config.scoring, ...scoringChanges } });
 }
 
+export function changeDisplay(db, eventId, displayChanges) {
+  const config = getTournamentConfig(db, eventId);
+  return updateTournamentConfig(db, eventId, { ...config, display: { ...config.display, ...displayChanges } });
+}
+
 export function startNewMatch(db, eventId) {
   const match = createMatch(db, eventId, {});
   return startMatch(db, match.id);

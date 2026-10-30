@@ -32,7 +32,7 @@ function assertAppError(work, status, messagePart) {
 describe('database setup', () => {
   it('migrates a fresh database and is safe to run twice', () => {
     const db = openDatabase(':memory:');
-    assert.deepEqual(migrate(db), [1, 2]);
+    assert.deepEqual(migrate(db), [1, 2, 3, 4]);
     assert.deepEqual(migrate(db), []);
     assert.equal(db.prepare('SELECT COUNT(*) AS n FROM events').get().n, 1);
     assert.equal(db.prepare('SELECT COUNT(*) AS n FROM broadcast_state').get().n, 1);
@@ -63,7 +63,7 @@ describe('database setup', () => {
     insertFinish.run(eventId, null);
     insertFinish.run(eventId, '2026-01-01T00:00:00.000Z'); // an undone finish must not count
 
-    assert.deepEqual(migrate(db), [2]);
+    assert.deepEqual(migrate(db), [2, 3, 4]);
     const row = db.prepare('SELECT finish_count, finish_entered FROM team_match_results WHERE match_id = 1 AND team_id = 1').get();
     assert.deepEqual({ ...row }, { finish_count: 2, finish_entered: 1 });
     assert.equal(computeStandings(db, eventId).find((entry) => entry.teamId === 1).finishPoints, 2);
@@ -84,7 +84,7 @@ describe('database setup', () => {
     migrate(db);
     assert.equal(seedDemoData(db).seeded, true);
     assert.equal(seedDemoData(db).seeded, false);
-    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM teams').get().n, 18);
+    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM teams').get().n, 20);
   });
 
   it('data survives closing and reopening the database file', () => {
@@ -97,7 +97,7 @@ describe('database setup', () => {
 
     const second = openDatabase(databasePath);
     migrate(second);
-    assert.equal(second.prepare('SELECT COUNT(*) AS n FROM players').get().n, 72);
+    assert.equal(second.prepare('SELECT COUNT(*) AS n FROM players').get().n, 80);
     second.close();
     fs.rmSync(directory, { recursive: true, force: true });
   });
@@ -369,7 +369,7 @@ describe('backup and restore', () => {
     const [player] = playersByTeamId.get(teams[1].id);
     const history = db.prepare('SELECT COUNT(*) AS n FROM finish_events').get().n;
     const backup = JSON.parse(JSON.stringify(exportBackup(db)));
-    assert.equal(backup.version, 2);
+    assert.equal(backup.version, 3);
 
     const target = createTestTournament({ teamCount: 2 });
     restoreBackup(target.db, backup);

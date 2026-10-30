@@ -16,6 +16,8 @@ export default function BroadcastControls({ state, run, busy }) {
   useEffect(() => setSubtitleInput(broadcast.subtitleText ?? ''), [broadcast.subtitleText]);
 
   const mvpOptions = state.players.filter((player) => player.active);
+  const { leaderboard } = state;
+  const compactLabel = `Compact (${leaderboard.teamsPerPage} per page, ${leaderboard.pageCount} ${leaderboard.pageCount === 1 ? 'page' : 'pages'})`;
 
   return (
     <div className="panel-stack">
@@ -39,8 +41,8 @@ export default function BroadcastControls({ state, run, busy }) {
         <h3>Leaderboard layout</h3>
         <div className="button-group">
           {[
-            ['full', 'Full (all teams)'],
-            ['scrolling', `Scrolling (${state.config.display.scrollPageSize} at a time)`],
+            ['full', `Full (all ${leaderboard.teamCount} teams)`],
+            ['scrolling', compactLabel],
           ].map(([layout, label]) => (
             <button
               key={layout}
@@ -55,6 +57,23 @@ export default function BroadcastControls({ state, run, busy }) {
           ))}
         </div>
 
+        {leaderboard.pageCount > 0 && (
+          <div className="form-row">
+            <p className="muted">
+              Compact leaderboard shows page {leaderboard.currentPageIndex + 1} of {leaderboard.pageCount} now. Each time the leaderboard is put
+              on the display it moves on to the next page.
+            </p>
+            <button
+              type="button"
+              className="button-secondary"
+              disabled={busy || leaderboard.pageCount < 2}
+              onClick={() => run(() => api.updateBroadcast({ advanceLeaderboardPage: true }))}
+            >
+              Next leaderboard page
+            </button>
+          </div>
+        )}
+
         <form
           className="form-row"
           onSubmit={(event) => {
@@ -63,7 +82,7 @@ export default function BroadcastControls({ state, run, busy }) {
           }}
         >
           <label>
-            Scroll interval (seconds, 3-120)
+            Page flip interval (seconds, 3-120; only used when rotatePagesWhileVisible is on in Settings)
             <input type="number" min="3" max="120" value={intervalInput} onChange={(event) => setIntervalInput(event.target.value)} />
           </label>
           <button type="submit" disabled={busy}>

@@ -52,8 +52,24 @@ export const defaultTournamentConfig = {
   display: {
     // TODO: CONFIGURE HERE - file name inside the media folder (see public/media/README.md).
     ambientVideoFile: 'ambient.mp4',
-    scrollPageSize: 9,
+    // Teams shown per page of the compact leaderboard (the full leaderboard always shows all teams).
+    teamsPerPage: 10,
+    // false: the compact leaderboard shows ONE page per appearance and the next appearance shows the
+    // next page. true: it also flips pages by itself while visible (every scrollIntervalSeconds).
+    rotatePagesWhileVisible: false,
     defaultScrollIntervalSeconds: 8,
     topFraggersCount: 5,
+  },
+
+  // Automatic leaderboard while the display is in ambient mode. The server decides when it
+  // appears; it is a temporary overlay, so the persisted broadcast mode stays "ambient".
+  scheduledLeaderboard: {
+    enabled: true,
+    // How often the leaderboard appears (start to start), in milliseconds. Default: 5 minutes.
+    leaderboardIntervalMs: 300000,
+    // How long each appearance lasts before the display returns to ambient. Default: 15 seconds.
+    leaderboardDisplayDurationMs: 15000,
+    // Teams per page of the scheduled leaderboard (18 teams = pages 1-9 and 10-18).
+    teamsPerPage: 9,
   },
 };

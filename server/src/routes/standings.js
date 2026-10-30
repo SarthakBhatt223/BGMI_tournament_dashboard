@@ -9,7 +9,7 @@ export function createStandingsRouter({ db }) {
   router.get('/standings', (req, res) => {
     const event = getActiveEvent(db);
     const standings = computeStandings(db, event.id);
-    const pageSize = getTournamentConfig(db, event.id).display.scrollPageSize;
+    const pageSize = getTournamentConfig(db, event.id).display.teamsPerPage;
     res.json({ standings, pages: splitIntoPages(standings, pageSize) });
   });
 
