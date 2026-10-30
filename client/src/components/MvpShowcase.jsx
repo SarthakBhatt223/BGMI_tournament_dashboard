@@ -1,67 +1,75 @@
-import EmptyState from './EmptyState.jsx';
+import MvpPortrait from './MvpPortrait.jsx';
+import TeamLogo from './TeamLogo.jsx';
 
-// Neutral geometric stand-in for a player portrait (no generated artwork).
-function PortraitPlaceholder() {
-  return (
-    <svg className="mvp-portrait" viewBox="0 0 120 120" role="img" aria-label="No player photo">
-      <rect width="120" height="120" fill="currentColor" opacity="0.12" />
-      <circle cx="60" cy="46" r="20" fill="currentColor" opacity="0.4" />
-      <path d="M20 110 C20 80 40 72 60 72 C80 72 100 80 100 110 Z" fill="currentColor" opacity="0.4" />
-    </svg>
-  );
-}
-
-function TopFraggers({ fraggers }) {
+function TopFraggers({ fraggers, mvpPlayerId }) {
   if (fraggers.length === 0) return null;
   return (
-    <section className="top-fraggers">
-      <h2>Most finishes (supporting statistic)</h2>
+    <section className="board mvp-fraggers">
+      <h2 className="board-title-small">Most finishes</h2>
       <ol>
-        {fraggers.map((player) => (
-          <li key={player.playerId}>
-            <span className="fragger-name">{player.name}</span>
-            <span className="fragger-team">{player.teamName}</span>
+        {fraggers.map((player, index) => (
+          <li key={player.playerId} className={player.playerId === mvpPlayerId ? 'fragger-mvp' : ''}>
+            <span className="fragger-rank">{index + 1}</span>
+            <span className="fragger-name">
+              {player.inGameName || player.name}
+              <span className="fragger-team">{player.teamName}</span>
+            </span>
             <span className="fragger-count">{player.totalFinishes}</span>
           </li>
         ))}
       </ol>
+      <p className="fragger-note">Supporting statistic. The MVP is chosen by the organizer.</p>
     </section>
   );
 }
 
-export default function MvpShowcase({ mvp, topFraggers }) {
+export default function MvpShowcase({ mvp, topFraggers, teams }) {
   if (!mvp) {
     return (
-      <div className="mvp-layout">
-        <EmptyState title="MVP not selected yet">The organizer will announce the MVP.</EmptyState>
-        <TopFraggers fraggers={topFraggers} />
+      <div className="mvp-stage">
+        <section className="board mvp-empty">
+          <div className="mvp-title mvp-title-idle">MVP</div>
+          <h2>To be announced</h2>
+          <p>The organizer will announce the MVP.</p>
+        </section>
+        <TopFraggers fraggers={topFraggers} mvpPlayerId={null} />
       </div>
     );
   }
+  const team = teams.find((entry) => entry.id === mvp.teamId) ?? { name: mvp.teamName };
+  // The in-game name is the headline; the registered name is shown below it only when it differs.
+  const headline = mvp.inGameName || mvp.name;
+  const realName = mvp.inGameName && mvp.inGameName !== mvp.name ? mvp.name : null;
   return (
-    <div className="mvp-layout">
-      <section className="mvp-card">
-        <PortraitPlaceholder />
-        <div>
-          <p className="mvp-label">MVP</p>
-          <h2 className="mvp-name">{mvp.name}</h2>
-          {mvp.inGameName && <p className="mvp-ign">{mvp.inGameName}</p>}
-          <p className="mvp-team">{mvp.teamName}</p>
-          <p className="mvp-total">
-            <span className="mvp-total-number">{mvp.totalFinishes}</span> finishes
+    <div className="mvp-stage">
+      <section className="board mvp-card">
+        <MvpPortrait playerId={mvp.playerId} name={headline} />
+        <div className="mvp-info">
+          <div className="mvp-title">MVP</div>
+          <p className="mvp-label">Most valuable player</p>
+          <h2 className="mvp-name">{headline}</h2>
+          {realName && <p className="mvp-ign">{realName}</p>}
+          <p className="mvp-team">
+            <TeamLogo team={team} />
+            <span>{mvp.teamName}</span>
           </p>
+          <div className="mvp-total">
+            <span className="mvp-total-number">{mvp.totalFinishes}</span>
+            <span className="mvp-total-label">Total finishes</span>
+          </div>
           {mvp.matchFinishes.length > 0 && (
             <ul className="mvp-matches">
               {mvp.matchFinishes.map((entry) => (
                 <li key={entry.matchId}>
-                  Match {entry.matchNumber}: {entry.finishCount}
+                  <span>M{entry.matchNumber}</span>
+                  <strong>{entry.finishCount}</strong>
                 </li>
               ))}
             </ul>
           )}
         </div>
       </section>
-      <TopFraggers fraggers={topFraggers} />
+      <TopFraggers fraggers={topFraggers} mvpPlayerId={mvp.playerId} />
     </div>
   );
 }

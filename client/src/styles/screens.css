@@ -1,0 +1,660 @@
+/* Per-screen layout for the admin console (Dashboard, Scoring, Roster, Broadcast, ...). */
+
+/* ---------- Dashboard ---------- */
+.stat-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.stat-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-3) var(--space-4);
+  border-right: 1px solid var(--line);
+  min-width: 0;
+}
+
+.stat-tile:last-child {
+  border-right: none;
+}
+
+.stat-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.stat-value {
+  font-family: var(--font-display);
+  font-size: 1.7rem;
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stat-detail {
+  font-size: 0.78rem;
+  color: var(--faint);
+}
+
+.stat-ok .stat-value {
+  color: var(--green);
+}
+
+.stat-warn .stat-value {
+  color: var(--amber);
+}
+
+.stat-bad .stat-value {
+  color: var(--danger);
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(300px, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.dashboard-note {
+  margin: var(--space-2) 0 0;
+  font-size: 0.8rem;
+}
+
+.quick-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+}
+
+.info-strip {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+}
+
+.info-strip > div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.info-strip > div:last-child {
+  border-bottom: none;
+}
+
+.info-strip dt {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.info-strip dd {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.warning-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.warning-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-left: 3px solid var(--amber);
+  background: var(--amber-soft);
+  font-size: 0.88rem;
+}
+
+.warning-list button {
+  flex: none;
+  min-height: 28px;
+  padding: 2px var(--space-3);
+  font-size: 0.85rem;
+}
+
+@media (max-width: 1100px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------- Scoring ---------- */
+.scoring-workspace {
+  gap: var(--space-3);
+}
+
+/* Match bar: stays visible at the top while the team table scrolls */
+.match-bar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  padding: var(--space-3) var(--space-4);
+  background: var(--panel);
+  border: 1px solid var(--line-strong);
+  border-left: 4px solid var(--orange);
+  box-shadow: 0 6px 12px -8px rgba(0, 0, 0, 0.8);
+}
+
+.match-bar-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-4);
+}
+
+.match-select select {
+  min-width: 280px;
+  min-height: 44px;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border: 1px solid currentColor;
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.status-planned {
+  color: var(--muted);
+}
+
+.status-in_progress {
+  color: var(--green);
+  background: var(--green-soft);
+}
+
+.status-in_progress .status-dot {
+  box-shadow: 0 0 0 4px var(--green-soft);
+}
+
+.status-finalized {
+  color: var(--gold);
+  background: rgba(212, 169, 51, 0.12);
+}
+
+.match-facts {
+  display: flex;
+  gap: var(--space-5);
+  margin: 0 0 0 var(--space-2);
+}
+
+.match-facts dt {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.match-facts dd {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.match-actions {
+  margin-left: auto;
+}
+
+.match-hint {
+  margin: var(--space-2) 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.new-match {
+  margin-top: var(--space-2);
+}
+
+.new-match summary {
+  width: max-content;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.new-match .form-row {
+  margin: var(--space-2) 0 0;
+}
+
+.scoring-panel {
+  padding: var(--space-2) var(--space-3) var(--space-3);
+}
+
+/* The table uses the rest of the screen height and scrolls inside, with a sticky header */
+.scoring-scroll {
+  max-height: calc(100vh - 290px);
+  min-height: 320px;
+  overflow: auto;
+}
+
+.scoring-table th,
+.scoring-table td {
+  padding: 5px var(--space-2);
+}
+
+.scoring-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--panel);
+  box-shadow: inset 0 -1px 0 var(--line-strong);
+}
+
+.scoring-table .col-rank {
+  width: 4em;
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.scoring-table .col-wwcd {
+  width: 5.5em;
+}
+
+.scoring-table .num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  width: 7em;
+}
+
+.scoring-table .total {
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--orange-2);
+}
+
+.scoring-table th:nth-child(5),
+.scoring-table th:nth-child(7),
+.scoring-table th:nth-child(8),
+.scoring-table tfoot td:nth-child(n + 3) {
+  text-align: right;
+}
+
+.scoring-table .team-name {
+  font-weight: 600;
+}
+
+.scoring-table tfoot td {
+  position: sticky;
+  bottom: 0;
+  background: var(--panel);
+}
+
+/* Finish controls: large, high-contrast targets. + is the primary action. */
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.stepper-button {
+  width: 48px;
+  min-width: 48px;
+  height: 42px;
+  padding: 0;
+  font-family: var(--font-ui);
+  font-size: 1.6rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.stepper-minus {
+  background: transparent;
+  border-color: var(--line-strong);
+  color: var(--text);
+}
+
+.stepper-minus:hover:not(:disabled) {
+  background: var(--danger-soft);
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.stepper-value {
+  min-width: 2.2ch;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: 1.7rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Placement control: colour shows the state at a glance */
+.placement-cell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.placement-select {
+  min-width: 9em;
+  min-height: 40px;
+  border-width: 2px;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.placement-set {
+  border-color: rgba(101, 214, 160, 0.55);
+}
+
+.placement-unset {
+  border-color: var(--line-strong);
+  color: var(--muted);
+}
+
+.placement-missing {
+  border-color: var(--amber);
+}
+
+.placement-duplicate {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+/* Row save state */
+.scoring-table tr.row-saving td:first-child {
+  box-shadow: inset 4px 0 0 var(--amber);
+}
+
+.scoring-table tr.row-saved td:first-child {
+  box-shadow: inset 4px 0 0 var(--green);
+}
+
+.scoring-table tr.row-error td {
+  background: var(--danger-soft);
+}
+
+.scoring-table tr.row-error td:first-child {
+  box-shadow: inset 4px 0 0 var(--danger);
+}
+
+.row-status {
+  display: block;
+  min-height: 1.1em;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.row-status-saving {
+  color: var(--amber);
+}
+
+.row-status-saved {
+  color: var(--green);
+}
+
+.row-status-error {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+/* ---------- Roster ---------- */
+.team-card-head .badge {
+  flex: none;
+}
+
+.team-card-incomplete {
+  border-left-color: var(--amber);
+}
+
+.player-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: var(--space-2) 0;
+}
+
+.player-row {
+  margin-bottom: 0;
+  padding: var(--space-1) 0;
+  border-top: 1px solid var(--line);
+}
+
+/* ---------- Player stats ---------- */
+.search-field {
+  max-width: 420px;
+  margin-bottom: var(--space-3);
+}
+
+.search-field input {
+  width: 100%;
+}
+
+.data-table .num {
+  font-variant-numeric: tabular-nums;
+}
+
+.data-table .total {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--orange-2);
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.chip {
+  padding: 1px var(--space-2);
+  border: 1px solid var(--line-strong);
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.chip strong {
+  color: var(--text);
+}
+
+/* ---------- Backup ---------- */
+.danger-zone {
+  padding: var(--space-2) var(--space-3);
+  border: 1px dashed var(--danger);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+/* ---------- Settings ---------- */
+.settings-summary {
+  display: grid;
+  grid-template-columns: minmax(200px, 320px) minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.settings-summary h3 {
+  margin-top: 0;
+}
+
+.compact-table th,
+.compact-table td {
+  padding: 4px var(--space-2);
+}
+
+.tie-list {
+  text-align: right;
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+  font-weight: 500;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 900px) {
+  .settings-summary {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------- Broadcast ---------- */
+.live-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid rgba(101, 214, 160, 0.35);
+  border-left: 4px solid var(--green);
+  background: var(--green-soft);
+}
+
+.live-state-main {
+  display: flex;
+  flex: 1 1 280px;
+  flex-direction: column;
+}
+
+.live-state-side {
+  display: flex;
+  flex-direction: column;
+  min-width: 180px;
+}
+
+.live-state-value {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+}
+
+.mode-buttons {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-3);
+}
+
+.broadcast-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.first-heading {
+  margin-top: 0;
+}
+
+.compact-page-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line-strong);
+  background: var(--bg-2);
+}
+
+.compact-page-indicator strong {
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  color: var(--orange-2);
+}
+
+.elimination-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.elimination-list li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.elimination-time {
+  flex: none;
+  font-size: 0.8rem;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.elimination-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.elimination-voided .elimination-text {
+  text-decoration: line-through;
+  opacity: 0.55;
+}
+
+.elimination-list button {
+  min-height: 28px;
+  padding: 2px var(--space-3);
+}
+
+/* ---------- Reset (danger) ---------- */
+.danger-panel {
+  border-color: var(--danger);
+}
+
+.danger-panel::before {
+  background: var(--danger);
+}
+
+.player-id {
+  flex: none;
+  min-width: 4.5em;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}

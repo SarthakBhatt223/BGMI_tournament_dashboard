@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 
-// The video stays mounted for the whole life of /display, so it keeps playing underneath the
-// leaderboard and MVP views and "back to ambient" is instant. It only loads a local file.
-export default function AmbientVideo({ media }) {
+// The video stays mounted for the whole life of /display and keeps playing while it is hidden
+// (`visible` false, any mode other than ambient), so "back to ambient" is instant. It only loads a
+// local file. Without a video, ambient mode shows the event title over the animated backdrop; that
+// title is not rendered in other modes, so it can never show through a board.
+export default function AmbientVideo({ media, title, subtitle, visible = true }) {
   const videoRef = useRef(null);
   const [failed, setFailed] = useState(false);
   const videoUrl = media?.ambientVideoUrl;
@@ -18,17 +20,20 @@ export default function AmbientVideo({ media }) {
   }, [available, videoUrl]);
 
   if (!available) {
+    if (!visible) return null;
     return (
-      <div className="ambient-placeholder">
-        <p>Ambient video not found</p>
-        <p className="ambient-placeholder-hint">Place the MP4 at public/media/{videoUrl?.replace('/media/', '') ?? 'ambient.mp4'}</p>
+      // Complete-looking fallback for the audience. The missing-file warning is on the admin dashboard.
+      <div className="ambient-fallback">
+        <span className="ambient-rule" aria-hidden="true" />
+        {title && <div className="ambient-title">{title}</div>}
+        {subtitle && <div className="ambient-subtitle">{subtitle}</div>}
       </div>
     );
   }
   return (
     <video
       ref={videoRef}
-      className="ambient-video"
+      className={`ambient-video${visible ? '' : ' is-hidden'}`}
       src={videoUrl}
       autoPlay
       loop

@@ -1,0 +1,332 @@
+/* Animated background for /display (see TacticalBackdrop.jsx). Restrained, cinematic, and never in
+   front of text: it sits at the bottom of the display's layer order.
+
+   Rules this file follows:
+   - Only `transform` and `opacity` are animated (GPU-composited). No filters, no JavaScript.
+   - Every loop is seamless: motion ping-pongs (alternate + ease-in-out), or the element is fully
+     transparent at both ends of its cycle (embers, dust, light sweep).
+   - Slow: parallax drifts take 65-160 s per leg, smoke 75-130 s, the camera 150 s.
+   - prefers-reduced-motion switches all of it off (see the end of the file). */
+
+.tactical-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  contain: layout paint;
+}
+
+/* Static base: dark gradient, fine diagonal texture and a faint grid */
+.bd-base {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.022) 1px, transparent 1px) 0 0 / 60px 60px,
+    linear-gradient(90deg, rgba(255, 255, 255, 0.022) 1px, transparent 1px) 0 0 / 60px 60px,
+    radial-gradient(ellipse at 50% 0%, #1b212a 0%, rgba(16, 18, 22, 0) 65%),
+    repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.018) 0 2px, transparent 2px 16px),
+    var(--bg);
+}
+
+/* Camera: an extremely slow push-in, centred low so the skyline stays anchored */
+.bd-camera {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 70%;
+  will-change: transform;
+  animation: bd-camera 150s ease-in-out infinite alternate;
+}
+
+/* Layers are slightly oversized so drifting never exposes an edge */
+.bd-layer {
+  position: absolute;
+  inset: -4% -5%;
+  will-change: transform;
+}
+
+.bd-layer svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Parallax: the nearer the layer, the larger and faster its drift */
+.bd-contours {
+  animation: bd-drift-contours 160s ease-in-out infinite alternate;
+}
+
+.bd-far {
+  animation: bd-drift-far 120s ease-in-out infinite alternate;
+}
+
+.bd-mid {
+  animation: bd-drift-mid 90s ease-in-out infinite alternate;
+}
+
+.bd-fore {
+  animation: bd-drift-fore 65s ease-in-out infinite alternate;
+}
+
+/* Orange atmospheric glow, breathing slowly (opacity only) */
+.bd-glow-a {
+  background: radial-gradient(ellipse 55% 60% at 12% 100%, rgba(244, 122, 40, 0.4), rgba(244, 122, 40, 0) 70%);
+  animation: bd-pulse 11s ease-in-out infinite alternate;
+}
+
+.bd-glow-b {
+  background: radial-gradient(ellipse 50% 55% at 90% 100%, rgba(200, 86, 26, 0.34), rgba(200, 86, 26, 0) 70%);
+  animation: bd-pulse 15s ease-in-out -6s infinite alternate;
+}
+
+/* Fog and smoke: soft blobs drifting sideways at three different speeds */
+.bd-smoke-a {
+  background:
+    radial-gradient(ellipse 34% 14% at 24% 80%, rgba(160, 170, 186, 0.16), rgba(160, 170, 186, 0) 100%),
+    radial-gradient(ellipse 30% 12% at 76% 86%, rgba(160, 170, 186, 0.14), rgba(160, 170, 186, 0) 100%);
+  animation: bd-smoke-drift 75s ease-in-out infinite alternate;
+}
+
+.bd-smoke-b {
+  background:
+    radial-gradient(ellipse 28% 11% at 62% 62%, rgba(150, 160, 176, 0.1), rgba(150, 160, 176, 0) 100%),
+    radial-gradient(ellipse 24% 10% at 18% 52%, rgba(150, 160, 176, 0.08), rgba(150, 160, 176, 0) 100%);
+  animation: bd-smoke-drift 100s ease-in-out -35s infinite alternate-reverse;
+}
+
+.bd-smoke-c {
+  background: radial-gradient(ellipse 70% 12% at 50% 97%, rgba(170, 178, 192, 0.24), rgba(170, 178, 192, 0) 100%);
+  animation: bd-smoke-drift 130s ease-in-out -50s infinite alternate;
+}
+
+/* Parachutes: a gentle bob and sway */
+.bd-chute {
+  position: absolute;
+  opacity: 0.5;
+  will-change: transform;
+  animation: bd-chute 17s ease-in-out infinite alternate;
+}
+
+.bd-chute svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.bd-chute-a {
+  left: 4%;
+  top: 13%;
+  width: 14vh;
+}
+
+.bd-chute-b {
+  right: 6%;
+  top: 40%;
+  width: 9vh;
+  animation-duration: 22s;
+  animation-delay: -9s;
+}
+
+/* Sparse embers and dust */
+.bd-particles {
+  position: absolute;
+  inset: 0;
+}
+
+.bd-ember,
+.bd-dust {
+  position: absolute;
+  border-radius: 50%;
+  opacity: 0;
+  will-change: transform, opacity;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+.bd-ember {
+  background: #ff9b45;
+  box-shadow: 0 0 6px 1px rgba(255, 155, 69, 0.65);
+  animation-name: bd-ember;
+}
+
+.bd-dust {
+  background: rgba(222, 227, 236, 0.95);
+  animation-name: bd-dust;
+}
+
+/* An occasional slow light sweep (about 4 s out of every 36 s) */
+.bd-sweep {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 34%, rgba(255, 170, 90, 0.07) 50%, transparent 66%);
+  opacity: 0;
+  transform: translateX(-100%);
+  will-change: transform, opacity;
+  animation: bd-sweep 36s linear infinite;
+}
+
+/* Optional custom artwork (public/media/backdrop.mp4 / backdrop.jpg) */
+.bd-custom {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background-position: center;
+  background-size: cover;
+  opacity: 0;
+  transition: opacity 600ms ease-out;
+}
+
+.bd-custom.is-ready {
+  opacity: 0.55;
+}
+
+/* When custom artwork is present, the built-in silhouettes step aside */
+.bd-silhouette {
+  transition: opacity 600ms ease-out;
+}
+
+.has-custom-art .bd-silhouette {
+  opacity: 0;
+}
+
+@keyframes bd-camera {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.04);
+  }
+}
+
+@keyframes bd-drift-contours {
+  from {
+    transform: translate3d(-1.6%, 0, 0);
+  }
+  to {
+    transform: translate3d(1.6%, 0, 0);
+  }
+}
+
+@keyframes bd-drift-far {
+  from {
+    transform: translate3d(-1.2%, 0, 0);
+  }
+  to {
+    transform: translate3d(1.2%, 0, 0);
+  }
+}
+
+@keyframes bd-drift-mid {
+  from {
+    transform: translate3d(-2.2%, 0, 0);
+  }
+  to {
+    transform: translate3d(2.2%, 0, 0);
+  }
+}
+
+@keyframes bd-drift-fore {
+  from {
+    transform: translate3d(-3.6%, 0, 0);
+  }
+  to {
+    transform: translate3d(3.6%, 0, 0);
+  }
+}
+
+@keyframes bd-pulse {
+  from {
+    opacity: 0.62;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes bd-smoke-drift {
+  from {
+    transform: translate3d(-9%, 0, 0);
+  }
+  to {
+    transform: translate3d(9%, 0, 0);
+  }
+}
+
+@keyframes bd-chute {
+  from {
+    transform: translate3d(0, -1vh, 0) rotate(-2.5deg);
+  }
+  to {
+    transform: translate3d(0, 1vh, 0) rotate(2.5deg);
+  }
+}
+
+@keyframes bd-ember {
+  0% {
+    transform: translate3d(0, 0, 0);
+    opacity: 0;
+  }
+  12% {
+    opacity: var(--o);
+  }
+  85% {
+    opacity: var(--o);
+  }
+  100% {
+    transform: translate3d(var(--dx), -62vh, 0);
+    opacity: 0;
+  }
+}
+
+@keyframes bd-dust {
+  0% {
+    transform: translate3d(0, 0, 0);
+    opacity: 0;
+  }
+  20% {
+    opacity: var(--o);
+  }
+  80% {
+    opacity: var(--o);
+  }
+  100% {
+    transform: translate3d(var(--dx), -26vh, 0);
+    opacity: 0;
+  }
+}
+
+@keyframes bd-sweep {
+  0% {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  2% {
+    opacity: 1;
+  }
+  10% {
+    transform: translateX(100%);
+    opacity: 1;
+  }
+  11%,
+  100% {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+/* Respect the operating-system "reduce motion" setting: a still background, no particles or sweep */
+@media (prefers-reduced-motion: reduce) {
+  .tactical-backdrop,
+  .tactical-backdrop *,
+  .mvp-sweep {
+    animation: none !important;
+  }
+
+  .bd-particles,
+  .bd-sweep,
+  .mvp-sweep {
+    display: none;
+  }
+}

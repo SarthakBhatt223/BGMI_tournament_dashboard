@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import AdminLogin from '../components/AdminLogin.jsx';
 import AppHeader from '../components/AppHeader.jsx';
 import BackupPanel from '../components/BackupPanel.jsx';
+import Dashboard from '../components/Dashboard.jsx';
 import BroadcastControls from '../components/BroadcastControls.jsx';
 import ErrorBanner from '../components/ErrorBanner.jsx';
 import MatchControls from '../components/MatchControls.jsx';
@@ -9,61 +10,29 @@ import PlayerFinishAudit from '../components/PlayerFinishAudit.jsx';
 import PlayerList from '../components/PlayerList.jsx';
 import RosterManager from '../components/RosterManager.jsx';
 import SettingsPanel from '../components/SettingsPanel.jsx';
-import TeamTable from '../components/TeamTable.jsx';
+import TopNav from '../components/TopNav.jsx';
 import { useActionRunner } from '../hooks/useActionRunner.js';
 import { useKeyedActions } from '../hooks/useKeyedActions.js';
 import { useTournamentState } from '../hooks/useTournamentState.js';
 import { api, getAdminSecret, setAdminSecret } from '../services/api.js';
-import { BROADCAST_MODE_LABELS, describeMatch } from '../utils/formatters.js';
 
 const TABS = [
   ['dashboard', 'Dashboard'],
   ['scoring', 'Scoring'],
   ['audit', 'Player Finish Audit'],
   ['roster', 'Roster'],
-  ['players', 'Player stats'],
+  ['players', 'Player Stats'],
   ['broadcast', 'Broadcast'],
   ['settings', 'Settings'],
   ['backup', 'Backup'],
 ];
 
-function Dashboard({ state, connection, onOpenTab }) {
-  const incompleteTeams = state.teams.filter(
-    (team) => team.active && team.playerCount < state.config.roster.playersPerTeam,
-  );
-  return (
-    <div className="panel-stack">
-      <section className="panel">
-        <h2>Overview</h2>
-        <dl className="facts">
-          <div><dt>Event</dt><dd>{state.event.name}</dd></div>
-          <div><dt>Teams</dt><dd>{state.counts.teams}</dd></div>
-          <div><dt>Players</dt><dd>{state.counts.players}</dd></div>
-          <div><dt>Current match</dt><dd>{describeMatch(state.currentMatch?.match)}</dd></div>
-          <div><dt>Display mode</dt><dd>{BROADCAST_MODE_LABELS[state.broadcast.mode]}</dd></div>
-          <div><dt>Connection</dt><dd>{connection}</dd></div>
-        </dl>
-        <div className="button-group">
-          <button type="button" onClick={() => onOpenTab('scoring')}>Go to scoring</button>
-          <button type="button" className="button-secondary" onClick={() => onOpenTab('audit')}>Player finish audit</button>
-          <button type="button" className="button-secondary" onClick={() => onOpenTab('roster')}>Manage roster</button>
-          <button type="button" className="button-secondary" onClick={() => onOpenTab('broadcast')}>Broadcast controls</button>
-        </div>
-        {incompleteTeams.length > 0 && (
-          <p className="form-message-warning">
-            {incompleteTeams.length} team(s) have fewer than {state.config.roster.playersPerTeam} players: {incompleteTeams.map((team) => team.name).join(', ')}.
-          </p>
-        )}
-        {!state.media.ambientVideoAvailable && (
-          <p className="form-message-warning">Ambient video not found at {state.media.ambientVideoUrl} (see public/media/README.md).</p>
-        )}
-      </section>
-      <section className="panel">
-        <h2>Standings</h2>
-        <TeamTable rows={state.standings} />
-      </section>
-    </div>
-  );
+// One-line status for the header, taken from what the server reports.
+function describeSystemStatus(state) {
+  const match = state.currentMatch?.match;
+  if (!match) return 'No match selected';
+  const status = match.status === 'in_progress' ? 'In progress' : match.status === 'finalized' ? 'Finalized' : 'Planned';
+  return `Match ${match.matchNumber} - ${status}`;
 }
 
 function AdminWorkspace({ onSignOut }) {
@@ -96,14 +65,13 @@ function AdminWorkspace({ onSignOut }) {
   // All tabs stay mounted (only hidden) so half-entered selections are never discarded.
   return (
     <>
-      <AppHeader eventName={state.event.name} connection={connection} onSignOut={getAdminSecret() ? onSignOut : undefined} />
-      <nav className="tab-bar" aria-label="Admin sections">
-        {TABS.map(([id, label]) => (
-          <button key={id} type="button" className={activeTab === id ? 'tab-active' : 'tab'} onClick={() => setActiveTab(id)}>
-            {label}
-          </button>
-        ))}
-      </nav>
+      <AppHeader
+        eventName={state.event.name}
+        connection={connection}
+        systemStatus={describeSystemStatus(state)}
+        onSignOut={getAdminSecret() ? onSignOut : undefined}
+      />
+      <TopNav tabs={TABS} activeTab={activeTab} onSelect={setActiveTab} />
       <main className="admin-main">
         <ErrorBanner error={error} onDismiss={clearError} />
         <ErrorBanner error={keyed.lastError} onDismiss={keyed.clearError} />

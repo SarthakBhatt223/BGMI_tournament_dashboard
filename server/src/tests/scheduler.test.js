@@ -61,10 +61,10 @@ describe('schedule timing', () => {
     scheduler.stop();
   });
 
-  it('defaults: every 5 minutes, 15 seconds on screen, 9 teams per page, enabled', () => {
+  it('defaults: every 5 minutes, 15 seconds on screen, 10 teams per page, enabled', () => {
     const { db, eventId } = fixture();
     assert.deepEqual(getTournamentConfig(db, eventId).scheduledLeaderboard, {
-      enabled: true, leaderboardIntervalMs: 300000, leaderboardDisplayDurationMs: 15000, teamsPerPage: 9,
+      enabled: true, leaderboardIntervalMs: 300000, leaderboardDisplayDurationMs: 15000, teamsPerPage: 10,
     });
   });
 
@@ -132,20 +132,20 @@ describe('schedule timing', () => {
 });
 
 describe('pagination of the scheduled leaderboard', () => {
-  it('18 teams: page 1 is ranks 1-9, page 2 is ranks 10-18, and they alternate', () => {
-    const { scheduler, leaderboards } = fixture({ teamCount: 18 });
+  it('20 teams: page 1 is ranks 1-10, page 2 is ranks 11-20, and they alternate', () => {
+    const { scheduler, leaderboards } = fixture({ teamCount: 20 });
     scheduler.start();
     advance(INTERVAL, 5);
     const shown = leaderboards();
     assert.deepEqual(shown.map((entry) => entry.page), [1, 2, 1, 2, 1]);
-    assert.ok(shown.every((entry) => entry.totalPages === 2 && entry.teamsPerPage === 9 && entry.standings.length === 9));
-    assert.deepEqual(shown[0].standings.map((row) => row.rank), [1, 2, 3, 4, 5, 6, 7, 8, 9]);
-    assert.deepEqual(shown[1].standings.map((row) => row.rank), [10, 11, 12, 13, 14, 15, 16, 17, 18]);
+    assert.ok(shown.every((entry) => entry.totalPages === 2 && entry.teamsPerPage === 10 && entry.standings.length === 10));
+    assert.deepEqual(shown[0].standings.map((row) => row.rank), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    assert.deepEqual(shown[1].standings.map((row) => row.rank), [11, 12, 13, 14, 15, 16, 17, 18, 19, 20]);
     scheduler.stop();
   });
 
   it('builds the number of pages from the real team count, without empty pages', () => {
-    for (const [teams, pages] of [[1, [1]], [5, [5]], [9, [9]], [10, [9, 1]], [18, [9, 9]], [20, [9, 9, 2]], [27, [9, 9, 9]], [28, [9, 9, 9, 1]]]) {
+    for (const [teams, pages] of [[1, [1]], [5, [5]], [10, [10]], [11, [10, 1]], [18, [10, 8]], [20, [10, 10]], [25, [10, 10, 5]], [30, [10, 10, 10]], [31, [10, 10, 10, 1]]]) {
       const { scheduler, leaderboards } = fixture({ teamCount: teams });
       scheduler.start();
       advance(INTERVAL, pages.length);
@@ -190,7 +190,7 @@ describe('leaderboard data', () => {
 
     const official = computeStandings(db, eventId);
     const [first] = leaderboards();
-    assert.deepEqual(first.standings.map((row) => row.teamId), official.slice(0, 9).map((row) => row.teamId));
+    assert.deepEqual(first.standings.map((row) => row.teamId), official.slice(0, 10).map((row) => row.teamId));
     assert.equal(first.standings[0].teamId, teams[11].id);
     assert.deepEqual(
       { rank: first.standings[0].rank, name: first.standings[0].name, logoPath: first.standings[0].logoPath, finishCount: first.standings[0].finishCount, placementPoints: first.standings[0].placementPoints, totalPoints: first.standings[0].totalPoints },
@@ -497,7 +497,7 @@ describe('display state recovery', () => {
     assert.equal(presentation.type, 'scheduled_leaderboard');
     assert.equal(presentation.page, 1);
     assert.equal(presentation.totalPages, 2);
-    assert.equal(presentation.standings.length, 9);
+    assert.equal(presentation.standings.length, 10);
     assert.equal(Date.parse(presentation.endsAt) - Date.parse(snapshot.generatedAt), DURATION - 5000);
 
     tick(DURATION - 5000);
@@ -539,7 +539,7 @@ describe('scheduled leaderboard settings', () => {
     const saved = JSON.parse(db.prepare('SELECT config_json FROM event_config').get().config_json);
     delete saved.scheduledLeaderboard;
     db.prepare('UPDATE event_config SET config_json = ?').run(JSON.stringify(saved));
-    assert.deepEqual(getTournamentConfig(db, eventId).scheduledLeaderboard, { enabled: true, leaderboardIntervalMs: 300000, leaderboardDisplayDurationMs: 15000, teamsPerPage: 9 });
+    assert.deepEqual(getTournamentConfig(db, eventId).scheduledLeaderboard, { enabled: true, leaderboardIntervalMs: 300000, leaderboardDisplayDurationMs: 15000, teamsPerPage: 10 });
     assert.doesNotThrow(() => validateTournamentConfig(saved)); // old backups carry such a config
   });
 });

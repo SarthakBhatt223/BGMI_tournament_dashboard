@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { api } from '../services/api.js';
 import { formatClockTime } from '../utils/formatters.js';
+import Panel from './Panel.jsx';
 
 function downloadJson(fileName, data) {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -50,14 +51,13 @@ export default function BackupPanel({ run, busy }) {
 
   return (
     <div className="panel-stack">
-      <section className="panel">
-        <h2>Backup and restore</h2>
+      <Panel title="Backup and restore">
         <div className="form-row">
-          <button type="button" disabled={busy} onClick={exportBackup}>
+          <button type="button" className="export-button" disabled={busy} onClick={exportBackup}>
             Export backup (JSON)
           </button>
-          <label>
-            Restore from backup file
+          <label className="danger-zone">
+            Restore from backup file (replaces all current data)
             <input
               type="file"
               accept="application/json,.json"
@@ -72,10 +72,9 @@ export default function BackupPanel({ run, busy }) {
         </div>
         <p className="muted">The file is validated by the server first. If it is invalid, nothing is changed.</p>
         {message && <p className="form-message-info">{message}</p>}
-      </section>
+      </Panel>
 
-      <section className="panel">
-        <h2>Recent activity</h2>
+      <Panel title="Recent activity">
         <button type="button" className="button-secondary" disabled={busy} onClick={loadAuditLog}>
           Load latest 50 actions
         </button>
@@ -99,7 +98,7 @@ export default function BackupPanel({ run, busy }) {
             </tbody>
           </table>
         )}
-      </section>
+      </Panel>
     </div>
   );
 }

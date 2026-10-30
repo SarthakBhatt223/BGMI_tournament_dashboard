@@ -2,7 +2,8 @@ import EmptyState from './EmptyState.jsx';
 import TeamLogo from './TeamLogo.jsx';
 
 // Standings as the server calculated them. Used by the admin dashboard and the display.
-export default function TeamTable({ rows, className = '' }) {
+export default function TeamTable({ rows: allRows, limit, className = '' }) {
+  const rows = limit ? allRows.slice(0, limit) : allRows;
   if (rows.length === 0) {
     return <EmptyState title="No teams yet">Add teams in the Roster tab.</EmptyState>;
   }
@@ -23,8 +24,10 @@ export default function TeamTable({ rows, className = '' }) {
           <tr key={row.teamId} className={row.rank <= 3 ? `top-rank top-rank-${row.rank}` : ''}>
             <td className="col-rank">{row.rank}</td>
             <td className="col-team">
-              <TeamLogo team={row} />
-              <span className="team-name">{row.name}</span>
+              <div className="team-cell">
+                <TeamLogo team={row} />
+                <span className="team-name">{row.name}</span>
+              </div>
             </td>
             <td className="col-number">{row.wwcd}</td>
             <td className="col-number">{row.placementPoints}</td>

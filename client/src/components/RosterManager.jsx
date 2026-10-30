@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { api } from '../services/api.js';
 import EmptyState from './EmptyState.jsx';
+import Panel from './Panel.jsx';
 import TeamLogo from './TeamLogo.jsx';
 
 function AddTeamForm({ run, busy }) {
@@ -48,11 +49,12 @@ function TeamRow({ team, allTeams, players, run, busy, playersPerTeam }) {
   }
 
   return (
-    <li className={`team-card ${team.active ? '' : 'team-inactive'}`}>
+    <li className={`team-card ${team.active ? '' : 'team-inactive'} ${team.active && activePlayerCount < playersPerTeam ? 'team-card-incomplete' : ''}`}>
       <div className="team-card-head">
         <TeamLogo team={team} />
         <input aria-label="Team name" value={name} onChange={(event) => setName(event.target.value)} maxLength={60} />
         <input aria-label="Abbreviation" className="input-short" value={shortName} onChange={(event) => setShortName(event.target.value)} maxLength={6} />
+        <span className={`badge ${team.active ? 'badge-live' : 'badge-muted'}`}>{team.active ? 'Active' : 'Inactive'}</span>
         <button type="button" disabled={busy || !hasChanges || name.trim() === ''} onClick={() => run(() => api.updateTeam(team.id, { name, shortName }))}>
           Save
         </button>
@@ -125,6 +127,7 @@ function PlayerRow({ player, teams, run, busy }) {
 
   return (
     <li className={`player-row ${player.active ? '' : 'team-inactive'}`}>
+      <span className="player-id" title={`MVP photo file: public/media/players/${player.id}.jpg`}>ID {player.id}</span>
       <input aria-label="Player name" value={name} onChange={(event) => setName(event.target.value)} maxLength={60} />
       <input aria-label="In-game name" placeholder="In-game name" value={inGameName} onChange={(event) => setInGameName(event.target.value)} maxLength={60} />
       <select
@@ -159,8 +162,7 @@ function PlayerRow({ player, teams, run, busy }) {
 
 export default function RosterManager({ state, run, busy }) {
   return (
-    <section className="panel">
-      <h2>Teams and players</h2>
+    <Panel title="Teams and players" actions={<span className="muted">{state.counts.teams} active teams, {state.counts.players} active players</span>}>
       <AddTeamForm run={run} busy={busy} />
       {state.teams.length === 0 ? (
         <EmptyState title="No teams yet">Add the first team above.</EmptyState>
@@ -171,6 +173,6 @@ export default function RosterManager({ state, run, busy }) {
           ))}
         </ul>
       )}
-    </section>
+    </Panel>
   );
 }

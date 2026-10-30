@@ -237,8 +237,8 @@ the normal scoring.
 
 While the display is in **ambient** mode the server shows the leaderboard every
 `scheduledLeaderboard.leaderboardIntervalMs` (default 300000 = 5 min) for
-`leaderboardDisplayDurationMs` (default 15000), `teamsPerPage` teams at a time (default 9; 18
-teams = ranks 1-9, then 10-18), alternating pages on successive appearances. Settings are in
+`leaderboardDisplayDurationMs` (default 15000), `teamsPerPage` teams at a time (default 10; 20
+teams = ranks 1-10, then 11-20), alternating pages on successive appearances. Settings are in
 Admin > Settings (`scheduledLeaderboard`: `enabled`, `leaderboardIntervalMs`,
 `leaderboardDisplayDurationMs`, `teamsPerPage`). The display duration must be shorter than the
 interval. This is separate from `display.teamsPerPage`, which belongs to the manual compact layout.
@@ -292,6 +292,7 @@ Reads are public; all other methods and `GET /backups/*`, `GET /audit-log`,
 | `GET /audit-log?limit=` | Recent administrative actions |
 | `GET, PATCH /event` | Event name, club, status |
 | `GET, PUT /event/config` | Scoring, roster, branding, display configuration |
+| `POST /event/reset-scores` | Test reset (Settings > Reset test data). Body `{"confirm":"RESET"}`. Deletes matches, scores, finishes, eliminations, MVP and current-match selection; keeps teams, players, logos and settings. Writes `data/backups/before-reset-<time>.json` first |
 | `GET, POST /teams`; `GET, PATCH, DELETE /teams/:id` | Teams (delete refused if they have history) |
 | `PUT /teams/:id/logo` | Raw image upload (png, jpeg, webp; max 2 MB) |
 | `GET, POST /players`; `GET, PATCH, DELETE /players/:id` | Players |

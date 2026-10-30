@@ -15,8 +15,11 @@
     "test": "node --test --disable-warning=ExperimentalWarning \"src/tests/*.test.js\""
   },
   "dependencies": {
-    "express": "4.21.2",
-    "socket.io": "4.8.1"
+    "eslint": "9.39.5",
+    "express": "^4.22.3",
+    "react-router-dom": "^7.18.5",
+    "socket.io": "4.8.1",
+    "vite": "^8.3.5"
   },
   "devDependencies": {
     "socket.io-client": "4.8.1"

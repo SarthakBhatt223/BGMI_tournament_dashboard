@@ -1,7 +1,11 @@
 import { io } from 'socket.io-client';
 
-// Socket.IO event names; they must match server/src/app.js.
-export const SOCKET_EVENTS = { stateUpdate: 'state:update', stateRequest: 'state:request' };
+// Socket.IO event names; they must match server/src/socketEvents.js.
+export const SOCKET_EVENTS = {
+  stateUpdate: 'state:update',
+  stateRequest: 'state:request',
+  eliminationNew: 'elimination:new',
+};
 
 let sharedSocket = null;
 

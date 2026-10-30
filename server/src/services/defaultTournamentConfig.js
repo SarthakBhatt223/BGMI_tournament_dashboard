@@ -69,7 +69,7 @@ export const defaultTournamentConfig = {
     leaderboardIntervalMs: 300000,
     // How long each appearance lasts before the display returns to ambient. Default: 15 seconds.
     leaderboardDisplayDurationMs: 15000,
-    // Teams per page of the scheduled leaderboard (18 teams = pages 1-9 and 10-18).
-    teamsPerPage: 9,
+    // Teams per page of the scheduled leaderboard (20 teams = pages 1-10 and 11-20).
+    teamsPerPage: 10,
   },
 };

@@ -1,5 +1,5 @@
-/* Match Scoring additions (light admin theme) and the Player Finish Audit tab (dark theme).
-   The audit styles are scoped to .audit-root so nothing else on the admin page changes. */
+/* Match scoring additions and the Player Finish Audit tab. The audit styles are scoped to
+   .audit-root. Colours come from the shared tokens in variables.css. */
 
 /* ---------- Match scoring ---------- */
 .scoring-header {
@@ -12,6 +12,7 @@
 
 .scoring-header h2 {
   margin-bottom: var(--space-1);
+  font-size: 1.4rem;
 }
 
 .scoring-header p {
@@ -26,14 +27,19 @@
 }
 
 .scoring-facts dt {
-  font-size: 0.8rem;
-  color: var(--color-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 .scoring-facts dd {
   margin: 0;
-  font-size: 1.15rem;
-  font-weight: 600;
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
 .scoring-warnings {
@@ -51,38 +57,24 @@
 }
 
 .scoring-table tfoot td {
-  font-weight: 600;
-  border-top: 2px solid var(--color-border);
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 700;
+  border-top: 2px solid var(--line-strong);
 }
 
 .row-duplicate td {
-  background: var(--color-error-bg);
+  background: var(--danger-soft);
 }
 
 .row-missing td {
-  background: var(--color-warning-bg);
-}
-
-.badge {
-  display: inline-block;
-  padding: 2px var(--space-2);
-  border-radius: 999px;
-  font-size: 0.75rem;
-  font-weight: 600;
-}
-
-.badge-provisional {
-  background: var(--color-warning-bg);
-  color: #6d4c00;
-}
-
-.badge-final {
-  background: #dff3e6;
-  color: #145c2e;
+  background: var(--amber-soft);
 }
 
 .wwcd-badge {
   margin-left: var(--space-2);
+  color: var(--gold);
+  background: rgba(212, 169, 51, 0.12);
 }
 
 .flag {
@@ -92,50 +84,17 @@
 }
 
 .flag-error {
-  color: var(--color-danger);
+  color: var(--danger);
 }
 
 .flag-warning {
-  color: #8a5a00;
+  color: var(--amber);
 }
 
-.stepper {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.stepper-button {
-  min-width: 36px;
-  padding: var(--space-1) var(--space-2);
-  font-size: 1.15rem;
-  line-height: 1.2;
-}
-
-.stepper-value {
-  min-width: 2ch;
-  text-align: center;
-  font-size: 1.1rem;
-  font-weight: 700;
-}
-
-.row-status {
-  min-width: 6ch;
-  font-size: 0.8rem;
-  color: var(--color-muted);
-}
-
-.row-status-error {
-  color: var(--color-danger);
-}
-
-.row-status-saved {
-  color: #145c2e;
-}
-
-/* ---------- Player Finish Audit (dark) ---------- */
+/* ---------- Player Finish Audit ---------- */
 .audit-root {
   padding: var(--space-4);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--audit-bg);
   color: var(--audit-text);
@@ -356,7 +315,7 @@
   min-width: 96px;
   padding: 2px var(--space-2);
   border: 1px solid currentColor;
-  border-radius: 999px;
+  border-radius: var(--radius);
   text-align: center;
   font-size: 0.75rem;
   font-weight: 700;

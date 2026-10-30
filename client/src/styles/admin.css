@@ -1,86 +1,175 @@
+/* Admin console: tactical operations layout. Top navigation, dense panels, thin borders. */
+
+/* ---------- Header ---------- */
 .app-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
   padding: var(--space-3) var(--space-5);
-  background: var(--color-surface);
-  border-bottom: 1px solid var(--color-border);
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--line);
+}
+
+.brand {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.brand-mark {
+  width: 4px;
+  background: var(--orange);
+  flex: none;
 }
 
 .app-header-title {
   margin: 0;
-  font-size: 1.3rem;
+  font-size: 1.6rem;
+  line-height: 1;
+  letter-spacing: 0.08em;
+}
+
+.app-header-title span {
+  color: var(--orange);
 }
 
 .app-header-subtitle {
-  margin: 0;
-  color: var(--color-muted);
+  margin: 4px 0 0;
+  font-family: var(--font-display);
   font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 .app-header-status {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
-.connection-status {
-  padding: var(--space-1) var(--space-3);
-  border-radius: 999px;
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 4px var(--space-3);
+  border: 1px solid var(--line-strong);
+  background: var(--panel);
+  font-family: var(--font-display);
   font-size: 0.85rem;
-  border: 1px solid var(--color-border);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
 }
 
 .connection-connected {
-  background: #e2f4e6;
+  color: var(--green);
+  border-color: rgba(101, 214, 160, 0.4);
 }
 
 .connection-connecting {
-  background: var(--color-warning-bg);
+  color: var(--amber);
+  border-color: rgba(232, 179, 57, 0.4);
 }
 
 .connection-disconnected {
-  background: var(--color-error-bg);
-  font-weight: 600;
+  color: var(--danger);
+  border-color: var(--danger);
+  background: var(--danger-soft);
 }
 
+.connection-connected .status-dot {
+  box-shadow: 0 0 0 3px var(--green-soft);
+}
+
+/* ---------- Top navigation ---------- */
 .tab-bar {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1);
-  padding: var(--space-2) var(--space-5) 0;
-  border-bottom: 1px solid var(--color-border);
-  background: var(--color-surface);
+  gap: 0;
+  padding: 0 var(--space-5);
+  overflow-x: auto;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--line);
+  scrollbar-width: thin;
 }
 
-.tab,
-.tab-active {
-  border: 1px solid transparent;
-  border-bottom: none;
-  border-radius: var(--radius) var(--radius) 0 0;
+.tab-bar .tab,
+.tab-bar .tab-active {
+  flex: none;
+  min-height: 44px;
+  padding: 0 var(--space-5);
+  border: none;
+  border-bottom: 3px solid transparent;
+  border-radius: 0;
   background: transparent;
-  color: var(--color-muted);
+  color: var(--faint);
+  font-size: 1rem;
+  letter-spacing: 0.1em;
+  white-space: nowrap;
 }
 
-.tab-active {
-  background: var(--color-bg);
-  border-color: var(--color-border);
-  color: var(--color-text);
-  font-weight: 600;
+.tab-bar .tab:hover:not(:disabled) {
+  background: var(--panel);
+  color: var(--text);
+}
+
+.tab-bar .tab-active,
+.tab-bar .tab-active:hover:not(:disabled) {
+  background: var(--orange-soft);
+  border-bottom-color: var(--orange);
+  color: var(--orange-2);
 }
 
 .admin-main {
-  max-width: 1200px;
+  max-width: 1480px;
   margin: 0 auto;
-  padding: var(--space-4) var(--space-5) var(--space-5);
+  padding: var(--space-4) var(--space-5) var(--space-6);
 }
 
+/* ---------- Panels ---------- */
 .panel {
+  position: relative;
   padding: var(--space-4);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
+  background: var(--panel);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
+}
+
+/* HUD corner tick */
+.panel::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  width: 28px;
+  height: 3px;
+  background: var(--orange);
+}
+
+.panel > h2:first-child,
+.panel-head h2 {
+  margin-bottom: var(--space-3);
+  font-size: 1.05rem;
+  letter-spacing: 0.12em;
+  color: var(--text);
+}
+
+.panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.panel-head h2 {
+  margin-bottom: var(--space-3);
 }
 
 .panel-stack {
@@ -104,14 +193,17 @@
   margin-bottom: var(--space-3);
 }
 
+/* ---------- Messages ---------- */
 .error-banner {
   display: flex;
   justify-content: space-between;
+  align-items: flex-start;
   gap: var(--space-4);
   margin-bottom: var(--space-4);
   padding: var(--space-3) var(--space-4);
-  background: var(--color-error-bg);
-  border: 1px solid var(--color-danger);
+  background: var(--danger-soft);
+  border: 1px solid var(--danger);
+  border-left-width: 4px;
   border-radius: var(--radius);
 }
 
@@ -121,18 +213,24 @@
 }
 
 .form-message-error {
-  color: var(--color-danger);
+  color: var(--danger);
 }
 
 .form-message-warning,
 .form-message-info {
+  margin: 0 0 var(--space-3);
   padding: var(--space-2) var(--space-3);
+  border: 1px solid rgba(232, 179, 57, 0.35);
+  border-left: 3px solid var(--amber);
   border-radius: var(--radius);
-  background: var(--color-warning-bg);
+  background: var(--amber-soft);
+  font-size: 0.9rem;
 }
 
 .form-message-info {
-  background: var(--color-info-bg);
+  border-color: rgba(244, 122, 40, 0.35);
+  border-left-color: var(--orange);
+  background: var(--orange-soft);
 }
 
 .facts {
@@ -143,8 +241,11 @@
 }
 
 .facts dt {
-  font-size: 0.8rem;
-  color: var(--color-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 .facts dd {
@@ -152,52 +253,96 @@
   font-weight: 600;
 }
 
+/* ---------- Tables ---------- */
 .data-table,
 .standings-table {
   width: 100%;
   border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
 }
 
 .data-table th,
+.standings-table th {
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--line-strong);
+  text-align: left;
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
 .data-table td,
-.standings-table th,
 .standings-table td {
   padding: var(--space-2);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--line);
   text-align: left;
   vertical-align: middle;
 }
 
+.data-table tbody tr:hover td,
+.standings-table tbody tr:hover td {
+  background: rgba(255, 255, 255, 0.025);
+}
+
 .standings-table .col-number,
-.standings-table .col-rank {
+.standings-table .col-rank,
+.data-table .col-number {
   text-align: right;
   width: 5em;
 }
 
-.standings-table .col-team {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.standings-table .col-total {
+.standings-table .col-rank {
+  width: 3.5em;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
   font-weight: 700;
 }
 
-.top-rank-1 td {
-  background: #fff7dc;
+.standings-table td.col-team {
+  font-weight: 600;
 }
 
-.top-rank-2 td {
-  background: #f0f2f4;
+.team-cell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
 }
 
-.top-rank-3 td {
-  background: #f8ebdf;
+.standings-table .team-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.standings-table .col-total {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--orange-2);
+}
+
+.top-rank-1 td:first-child {
+  box-shadow: inset 3px 0 0 var(--gold);
+  color: var(--gold);
+}
+
+.top-rank-2 td:first-child {
+  box-shadow: inset 3px 0 0 var(--silver);
+  color: var(--silver);
+}
+
+.top-rank-3 td:first-child {
+  box-shadow: inset 3px 0 0 var(--bronze);
+  color: var(--bronze);
 }
 
 .row-reversed {
-  color: var(--color-muted);
+  color: var(--muted);
   text-decoration: line-through;
 }
 
@@ -206,6 +351,7 @@
   padding-left: var(--space-5);
 }
 
+/* ---------- Roster cards ---------- */
 .team-list,
 .player-rows {
   list-style: none;
@@ -222,12 +368,14 @@
 
 .team-card {
   padding: var(--space-3);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--line-strong);
   border-radius: var(--radius);
+  background: var(--bg-2);
 }
 
 .team-inactive {
-  opacity: 0.6;
+  opacity: 0.55;
 }
 
 .team-card-head,
@@ -253,7 +401,22 @@
 }
 
 .config-editor {
-  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-family: var(--font-mono);
   font-size: 0.85rem;
   width: 100%;
+}
+
+@media (max-width: 760px) {
+  .app-header {
+    flex-wrap: wrap;
+    padding: var(--space-3);
+  }
+
+  .tab-bar {
+    padding: 0 var(--space-2);
+  }
+
+  .admin-main {
+    padding: var(--space-3);
+  }
 }

@@ -1,49 +1,89 @@
-/* Design tokens. The final visual identity (tactical black/orange/green) can be applied by
-   changing only the values in this file. */
+/* Design tokens for the whole app (admin console and public display).
+   Tactical broadcast palette: charcoal surfaces, burnt-orange accent, restrained green for "live". */
 :root {
-  /* TODO: CONFIGURE HERE - brand colours (neutral placeholders for now) */
-  --color-bg: #f4f5f7;
-  --color-surface: #ffffff;
-  --color-text: #1b1f24;
-  --color-muted: #5c6670;
-  --color-border: #d3d8de;
-  --color-accent: #2f5d9e;
-  --color-accent-text: #ffffff;
-  --color-danger: #a12626;
-  --color-warning-bg: #fff4d6;
-  --color-error-bg: #fde4e4;
-  --color-info-bg: #e3eefc;
+  /* Surfaces */
+  --bg: #101216;
+  --bg-2: #171a20;
+  --panel: #1c2229;
+  --elevated: #252a32;
+  --line: #2e353f;
+  --line-strong: #3d4653;
 
-  /* Public display (dark) */
-  --display-bg: #101214;
-  --display-surface: #1a1d21;
-  --display-text: #f1f3f5;
-  --display-muted: #9aa3ad;
-  --display-border: #2c3138;
-  --display-rank-1: #d4a933;
-  --display-rank-2: #aeb6bf;
-  --display-rank-3: #b87a45;
+  /* Accents */
+  --orange: #f47a28;
+  --orange-2: #ff9b45;
+  --orange-text: #1a1006; /* text on an orange fill */
+  --green: #65d6a0;
+  --danger: #ef5350;
+  --amber: #e8b339;
 
-  /* Player Finish Audit (dark charcoal with orange actions, green reconciled, amber/red problems) */
-  --audit-bg: #171a20;
-  --audit-surface: #1f232b;
-  --audit-surface-raised: #262b35;
-  --audit-border: #343a46;
-  --audit-text: #eef0f3;
-  --audit-muted: #98a1ae;
-  --audit-orange: #ff7a1a;
-  --audit-orange-text: #1a1006;
-  --audit-green: #35c46a;
-  --audit-amber: #f2b01e;
-  --audit-red: #ef5350;
+  /* Text */
+  --text: #f1f3f5;
+  --muted: #aeb5c1;
+  --faint: #7d8693;
+  --text-soft: #d6dbe3; /* secondary figures on the display: bright enough to read from far away */
 
+  /* Podium */
+  --gold: #d4a933;
+  --silver: #aeb6bf;
+  --bronze: #b87a45;
+
+  /* Translucent fills for status states */
+  --orange-soft: rgba(244, 122, 40, 0.14);
+  --green-soft: rgba(101, 214, 160, 0.13);
+  --danger-soft: rgba(239, 83, 80, 0.14);
+  --amber-soft: rgba(232, 179, 57, 0.14);
+
+  /* Type */
+  --font-display: 'Rajdhani', 'Oswald', 'Bahnschrift', 'Arial Narrow', system-ui, sans-serif;
+  --font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  /* Spacing */
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
   --space-4: 16px;
   --space-5: 24px;
+  --space-6: 32px;
 
-  --font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --font-size-base: 15px;
-  --radius: 4px;
+  /* Geometry: sharp panels, a single small chamfer is used for HUD corners */
+  --radius: 2px;
+  --chamfer: 10px;
+
+  /* ---- Legacy names kept so older component CSS keeps resolving ---- */
+  --color-bg: var(--bg);
+  --color-surface: var(--panel);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-border: var(--line);
+  --color-accent: var(--orange);
+  --color-accent-text: var(--orange-text);
+  --color-danger: var(--danger);
+  --color-warning-bg: var(--amber-soft);
+  --color-error-bg: var(--danger-soft);
+  --color-info-bg: var(--orange-soft);
+  --font-family: var(--font-ui);
+  --font-size-base: 14px;
+
+  --display-bg: var(--bg);
+  --display-surface: var(--panel);
+  --display-text: var(--text);
+  --display-muted: var(--muted);
+  --display-border: var(--line);
+  --display-rank-1: var(--gold);
+  --display-rank-2: var(--silver);
+  --display-rank-3: var(--bronze);
+
+  --audit-bg: var(--bg-2);
+  --audit-surface: var(--panel);
+  --audit-surface-raised: var(--elevated);
+  --audit-border: var(--line);
+  --audit-text: var(--text);
+  --audit-muted: var(--muted);
+  --audit-orange: var(--orange);
+  --audit-orange-text: var(--orange-text);
+  --audit-green: var(--green);
+  --audit-amber: var(--amber);
+  --audit-red: var(--danger);
 }

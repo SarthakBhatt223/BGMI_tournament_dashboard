@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import EmptyState from './EmptyState.jsx';
+import Panel from './Panel.jsx';
 
 // Player statistics with search by player or team name. Ranks come from the server.
 export default function PlayerList({ playerStats }) {
@@ -10,9 +11,8 @@ export default function PlayerList({ playerStats }) {
     : playerStats;
 
   return (
-    <section className="panel">
-      <h2>Player statistics</h2>
-      <label>
+    <Panel title="Player statistics" actions={<span className="muted">{visiblePlayers.length} of {playerStats.length} players</span>}>
+      <label className="search-field">
         Search player or team
         <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} />
       </label>
@@ -22,29 +22,34 @@ export default function PlayerList({ playerStats }) {
         <table className="data-table">
           <thead>
             <tr>
-              <th>Rank</th>
+              <th className="col-rank">Rank</th>
               <th>Player</th>
+              <th>In-game name</th>
               <th>Team</th>
-              <th>Total finishes</th>
+              <th className="col-number">Finishes</th>
               <th>By match</th>
             </tr>
           </thead>
           <tbody>
             {visiblePlayers.map((player) => (
               <tr key={player.playerId}>
-                <td>{player.rank}</td>
-                <td>
-                  {player.name}
-                  {player.inGameName ? <span className="muted"> ({player.inGameName})</span> : null}
-                </td>
+                <td className="col-rank">{player.rank}</td>
+                <td>{player.name}</td>
+                <td className="muted">{player.inGameName || '-'}</td>
                 <td>{player.teamName}</td>
-                <td>{player.totalFinishes}</td>
-                <td className="muted">{player.matchFinishes.map((entry) => `M${entry.matchNumber}: ${entry.finishCount}`).join(', ')}</td>
+                <td className="col-number num total">{player.totalFinishes}</td>
+                <td>
+                  <span className="chip-row">
+                    {player.matchFinishes.map((entry) => (
+                      <span key={entry.matchNumber} className="chip">M{entry.matchNumber} <strong>{entry.finishCount}</strong></span>
+                    ))}
+                  </span>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       )}
-    </section>
+    </Panel>
   );
 }

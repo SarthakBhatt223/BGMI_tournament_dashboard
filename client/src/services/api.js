@@ -65,6 +65,8 @@ export const api = {
   getAuditLog: (limit = 50) => request('GET', `/audit-log?limit=${limit}`),
 
   updateEvent: (event) => request('PATCH', '/event', { body: event }),
+  // Removes all matches, scores, finishes and eliminations; keeps teams, players and settings.
+  resetScores: () => request('POST', '/event/reset-scores', { body: { confirm: 'RESET' } }),
   updateConfig: (config) => request('PUT', '/event/config', { body: config }),
 
   createTeam: (team) => request('POST', '/teams', { body: team }),
@@ -91,6 +93,12 @@ export const api = {
   getPlayerAudit: (matchId) => request('GET', `/matches/${matchId}/player-audit`),
   adjustPlayerFinish: (matchId, playerId, teamId, delta, requestId) =>
     request('POST', `/matches/${matchId}/players/${playerId}/finishes`, { body: { delta, requestId, teamId } }),
+
+  // Elimination events: credit only, they never change scores. requestId must be new per recording.
+  listEliminations: (matchId) => request('GET', `/matches/${matchId}/eliminations`),
+  recordElimination: (matchId, body) => request('POST', `/matches/${matchId}/eliminations`, { body }),
+  voidElimination: (matchId, eliminationId, reason) =>
+    request('POST', `/matches/${matchId}/eliminations/${eliminationId}/void`, { body: { reason } }),
 
   updateBroadcast: (changes) => request('PUT', '/broadcast', { body: changes }),
   selectMvp: (playerId) => request('PUT', '/mvp', { body: { playerId } }),

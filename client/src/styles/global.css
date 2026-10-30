@@ -12,16 +12,22 @@ body,
 }
 
 body {
-  font-family: var(--font-family);
+  font-family: var(--font-ui);
   font-size: var(--font-size-base);
-  color: var(--color-text);
-  background: var(--color-bg);
+  line-height: 1.4;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
 }
 
 h1,
 h2,
 h3 {
   margin: 0 0 var(--space-3);
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 h2 {
@@ -33,6 +39,17 @@ h3 {
   margin-top: var(--space-4);
 }
 
+code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  color: var(--orange-2);
+}
+
+a {
+  color: var(--orange-2);
+}
+
+/* ---------- Inputs ---------- */
 button,
 input,
 select,
@@ -43,56 +60,108 @@ textarea {
 input,
 select,
 textarea {
-  padding: var(--space-2);
-  border: 1px solid var(--color-border);
+  min-height: 34px;
+  padding: 6px var(--space-2);
+  border: 1px solid var(--line-strong);
   border-radius: var(--radius);
-  background: var(--color-surface);
-  color: var(--color-text);
+  background: var(--bg);
+  color: var(--text);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--faint);
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--orange);
+  outline-offset: 1px;
+}
+
+input[type='file'] {
+  padding: 4px;
+  color: var(--muted);
 }
 
 label {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-  font-size: 0.85rem;
-  color: var(--color-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
+/* ---------- Buttons ---------- */
 button {
-  padding: var(--space-2) var(--space-4);
-  border: 1px solid var(--color-accent);
+  min-height: 34px;
+  padding: 6px var(--space-4);
+  border: 1px solid var(--orange);
   border-radius: var(--radius);
-  background: var(--color-accent);
-  color: var(--color-accent-text);
+  background: var(--orange);
+  color: var(--orange-text);
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+
+button:hover:not(:disabled) {
+  background: var(--orange-2);
+  border-color: var(--orange-2);
 }
 
 button:disabled {
-  opacity: 0.45;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
 .button-secondary {
-  background: var(--color-surface);
-  color: var(--color-accent);
+  background: transparent;
+  border-color: var(--line-strong);
+  color: var(--text);
+}
+
+.button-secondary:hover:not(:disabled) {
+  background: var(--elevated);
+  border-color: var(--muted);
 }
 
 .button-danger {
-  background: var(--color-surface);
-  border-color: var(--color-danger);
-  color: var(--color-danger);
+  background: transparent;
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.button-danger:hover:not(:disabled) {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
 }
 
 .button-active {
-  background: var(--color-text);
-  border-color: var(--color-text);
-  color: var(--color-surface);
+  background: var(--orange-soft);
+  border-color: var(--orange);
+  color: var(--orange-2);
+}
+
+.button-active:hover:not(:disabled) {
+  background: var(--orange-soft);
+  border-color: var(--orange-2);
 }
 
 .button-large {
-  padding: var(--space-3) var(--space-5);
-  font-size: 1.2rem;
-  font-weight: 600;
+  min-height: 44px;
+  padding: var(--space-2) var(--space-5);
+  font-size: 1.15rem;
 }
 
 [hidden] {
@@ -100,7 +169,7 @@ button:disabled {
 }
 
 .muted {
-  color: var(--color-muted);
+  color: var(--muted);
 }
 
 .plain-page {
@@ -118,21 +187,27 @@ button:disabled {
 .empty-state {
   padding: var(--space-5);
   text-align: center;
-  color: var(--color-muted);
+  color: var(--muted);
 }
 
 .empty-state-title {
   margin: 0;
-  font-weight: 600;
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text);
 }
 
 .empty-state-text {
   margin: var(--space-2) 0 0;
 }
 
+/* ---------- Team logo (image, or initials when no logo is uploaded) ---------- */
 .team-logo {
-  width: 1.6em;
-  height: 1.6em;
+  width: var(--logo-size, 1.7em);
+  height: var(--logo-size, 1.7em);
   object-fit: contain;
   flex: none;
 }
@@ -141,9 +216,68 @@ button:disabled {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.6em;
-  font-weight: 600;
-  border: 1px solid currentColor;
-  opacity: 0.55;
+  /* Same outer size as a logo image (1.7em of the parent): the font is 0.7em, so 1.7 / 0.7 em. */
+  width: calc(var(--logo-size, 1.7em) / 0.7);
+  height: calc(var(--logo-size, 1.7em) / 0.7);
+  font-family: var(--font-display);
+  font-size: 0.7em;
+  font-weight: 700;
   letter-spacing: 0.02em;
+  border: 1px solid var(--line-strong);
+  background: var(--elevated);
+  color: var(--muted);
+}
+
+/* ---------- Badges (shared) ---------- */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px var(--space-2);
+  border: 1px solid currentColor;
+  border-radius: var(--radius);
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1.5;
+}
+
+.badge-provisional {
+  color: var(--amber);
+  background: var(--amber-soft);
+}
+
+.badge-final {
+  color: var(--green);
+  background: var(--green-soft);
+}
+
+.badge-live {
+  color: var(--green);
+  background: var(--green-soft);
+}
+
+.badge-warn {
+  color: var(--amber);
+  background: var(--amber-soft);
+}
+
+.badge-danger {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.badge-muted {
+  color: var(--muted);
+}
+
+/* Small status dot used by connection and live indicators */
+.status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
 }
